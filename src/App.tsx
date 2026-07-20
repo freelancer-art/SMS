@@ -7,7 +7,9 @@ import {
   Database, 
   ArrowRight,
   RefreshCw,
-  Cpu
+  Cpu,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog } from './types';
 import { 
@@ -81,6 +83,17 @@ const DEFAULT_AUDIT_LOGS: AuditLog[] = [
 ];
 
 export default function App() {
+  // Theme state
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('theme', nextTheme);
+  };
+
   // Supabase Connection States
   const [supabaseUrl, setSupabaseUrl] = useState<string>(() => {
     return localStorage.getItem('society_supabase_url') || 'https://czirnbiybxydsdzbimyw.supabase.co';
@@ -97,6 +110,14 @@ export default function App() {
   const [activeSocietyId, setActiveSocietyId] = useState<string>(() => {
     return localStorage.getItem('active_society_id') || 'greenwood';
   });
+
+  // Super-Admin Society Register States
+  const [showRegisterSociety, setShowRegisterSociety] = useState(false);
+  const [newSocName, setNewSocName] = useState('');
+  const [newSocType, setNewSocType] = useState('Housing Society');
+  const [newSocAddress, setNewSocAddress] = useState('');
+  const [newSocHasWings, setNewSocHasWings] = useState(true);
+  const [newSocWingsList, setNewSocWingsList] = useState('A, B, C');
 
   // Derived active society properties
   const activeSociety = societies.find(s => s.id === activeSocietyId) || societies[0] || DEFAULT_SOCIETIES[0];
@@ -851,6 +872,41 @@ export default function App() {
     }
   };
 
+  const handleAddNotice = async (noticeData: { title: string; category: string; content: string }) => {
+    const noticeId = `N-${Date.now()}`;
+    const newNotice: Notice = {
+      id: noticeId,
+      SocietyId: activeSocietyId,
+      Date: new Date().toISOString().split('T')[0],
+      Title: noticeData.title,
+      Category: noticeData.category as any,
+      Content: noticeData.content,
+      PostedBy: 'Society Management'
+    };
+    const nextNotices = [newNotice, ...notices];
+    setNotices(nextNotices);
+    localStorage.setItem('society_notices', JSON.stringify(nextNotices));
+
+    // Audit action
+    handleAddAuditLog('Publish Notice', `Published notice "${noticeData.title}"`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Notices`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(newNotice)
+        });
+      } catch (err) {
+        console.error("Error syncing new notice to Supabase:", err);
+      }
+    }
+  };
+
   const handleCreateSociety = (name: string, type: string, address: string, wings: string[], wingsEnabled: boolean) => {
     const newId = `soc-${Date.now()}`;
     const newSoc: Society = {
@@ -948,31 +1004,50 @@ export default function App() {
   const filteredNotices = notices.filter(n => n.SocietyId === activeSocietyId);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col font-sans overflow-hidden">
+    <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans overflow-hidden transition-colors duration-300`}>
       {/* Top Navbar - hidden on mobile viewports */}
-      <header className="hidden lg:flex bg-slate-900 border-b border-slate-800 px-6 py-4 justify-between items-center z-10 flex-shrink-0">
+      <header className={`hidden lg:flex ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-xs'} border-b px-6 py-4 justify-between items-center z-10 flex-shrink-0 transition-colors duration-300`}>
         <div className="flex items-center gap-3">
           <div className="p-2 bg-purple-600/20 text-purple-400 rounded-lg border border-purple-500/30">
             <Building2 className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-md font-extrabold text-slate-100 flex items-center gap-2">
+            <h1 className={`text-md font-extrabold ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'} flex items-center gap-2`}>
               Society Connect <span className="text-[10px] bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full text-purple-400 font-bold uppercase tracking-wider">Expo Mobile Preview</span>
             </h1>
-            <p className="text-xs text-slate-400 font-medium">Housing Society Management Portal & Developer Toolkit</p>
+            <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} font-medium`}>Housing Society Management Portal & Developer Toolkit</p>
           </div>
         </div>
 
-        <div className="hidden lg:flex items-center gap-2 text-xs font-semibold text-slate-400 bg-slate-950/50 px-3.5 py-1.5 rounded-full border border-slate-800/80">
-          <Database className="w-3.5 h-3.5 text-purple-400" />
-          <span>Active Storage:</span>
-          {supabaseAnonKey ? (
-            <span className="text-green-400 flex items-center gap-1 font-mono">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Supabase Connected
-            </span>
-          ) : (
-            <span className="text-purple-400 font-mono">Simulated LocalStorage Sandbox</span>
-          )}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleTheme}
+            id="theme-toggle-btn"
+            className={`p-2 rounded-lg border ${
+              theme === 'dark'
+                ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
+                : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200 shadow-sm'
+            } transition-all cursor-pointer flex items-center justify-center`}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            {theme === 'dark' ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+          </button>
+
+          <div className={`hidden lg:flex items-center gap-2 text-xs font-semibold ${
+            theme === 'dark' 
+              ? 'text-slate-400 bg-slate-950/50 border-slate-800/80' 
+              : 'text-slate-600 bg-slate-100 border-slate-200 shadow-xs'
+          } px-3.5 py-1.5 rounded-full border transition-all duration-300`}>
+            <Database className="w-3.5 h-3.5 text-purple-400" />
+            <span>Active Storage:</span>
+            {supabaseAnonKey ? (
+              <span className="text-green-400 flex items-center gap-1 font-mono">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Supabase Connected
+              </span>
+            ) : (
+              <span className="text-purple-400 font-mono">Simulated LocalStorage Sandbox</span>
+            )}
+          </div>
         </div>
       </header>
 
@@ -980,12 +1055,12 @@ export default function App() {
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         
         {/* Left Side: Interactive Mobile App Frame Simulator */}
-        <div className="w-full h-full lg:w-[480px] bg-slate-950 flex flex-col justify-start items-center overflow-y-auto p-0 lg:p-6 lg:border-r border-slate-800/60 scrollbar-thin">
+        <div className={`w-full h-full lg:w-[480px] ${theme === 'dark' ? 'bg-slate-950 border-slate-800/60' : 'bg-slate-100 border-slate-200/80'} flex flex-col justify-start items-center overflow-y-auto p-0 lg:p-6 lg:border-r scrollbar-thin transition-colors duration-300`}>
           <div className="hidden lg:block text-center mb-4 max-w-sm">
             <span className="text-[11px] font-extrabold text-purple-400 uppercase tracking-widest flex items-center justify-center gap-1.5">
               <Cpu className="w-3.5 h-3.5" /> Interactive iOS / Android Emulator
             </span>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} mt-1`}>
               Select or create societies dynamically. Edit name, wings, address, and status under settings!
             </p>
           </div>
@@ -1001,6 +1076,7 @@ export default function App() {
             onAddExpense={handleAddExpense}
             onAddComplaint={handleAddComplaint}
             onUpdateComplaint={handleUpdateComplaintStatus}
+            onAddNotice={handleAddNotice}
             onRefresh={async () => syncWithSupabase()}
             scriptUrl={supabaseAnonKey ? 'Connected' : ''}
             societyName={societyName}
@@ -1017,8 +1093,10 @@ export default function App() {
             onCreateSociety={handleCreateSociety}
           />
 
-          <div className="hidden lg:flex flex-col gap-2.5 text-[11px] text-slate-500 mt-3 p-3 bg-slate-900/40 border border-slate-800/40 rounded-xl max-w-sm w-full">
-            <div className="flex items-center justify-between font-bold text-slate-400 border-b border-slate-800/60 pb-1.5 mb-1 select-none">
+          <div className={`hidden lg:flex flex-col gap-2.5 text-[11px] ${
+            theme === 'dark' ? 'text-slate-500 bg-slate-900/40 border-slate-800/40' : 'text-slate-600 bg-white border-slate-200 shadow-xs'
+          } mt-3 p-3 rounded-xl max-w-sm w-full transition-all duration-300`}>
+            <div className={`flex items-center justify-between font-bold ${theme === 'dark' ? 'text-slate-400 border-slate-800/60' : 'text-slate-700 border-slate-200'} border-b pb-1.5 mb-1 select-none`}>
               <span>🛠️ Developer Control Panel</span>
               <span className="text-[10px] text-purple-400 uppercase tracking-wider bg-purple-950/40 border border-purple-900/30 px-1.5 py-0.5 rounded">Active Societies</span>
             </div>
@@ -1028,8 +1106,8 @@ export default function App() {
                 const isDemo = s.id === 'greenwood' || s.id === 'royal_heights' || s.id === 'sea_breeze';
                 const displayCode = isDemo ? `${s.id} or ${s.id === 'greenwood' ? 'gw100' : s.id === 'royal_heights' ? 'rh200' : 'sb300'}` : s.id;
                 return (
-                  <div key={s.id} className="flex justify-between items-center bg-slate-950/40 px-2 py-1.5 rounded border border-slate-800/20 font-sans">
-                    <span className="font-semibold text-slate-300 truncate max-w-[170px]">🏢 {s.Name}</span>
+                  <div key={s.id} className={`flex justify-between items-center ${theme === 'dark' ? 'bg-slate-950/40 border-slate-800/20' : 'bg-slate-50 border-slate-100'} px-2 py-1.5 rounded font-sans`}>
+                    <span className={`font-semibold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'} truncate max-w-[170px]`}>🏢 {s.Name}</span>
                     <span className="font-mono text-[10px] text-purple-400 bg-purple-950/20 border border-purple-900/20 px-1 py-0.5 rounded select-all cursor-pointer" title="Click to copy code">
                       Code: {displayCode}
                     </span>
@@ -1038,8 +1116,124 @@ export default function App() {
               })}
             </div>
 
-            <div className="flex justify-between items-center text-[10px] text-slate-500 border-t border-slate-800/40 pt-2 select-none">
-              <span>Gate Passcode: <strong className="text-slate-400 font-mono">admin123</strong></span>
+            {!showRegisterSociety ? (
+              <button
+                type="button"
+                onClick={() => setShowRegisterSociety(true)}
+                className="mt-1.5 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 rounded text-[10px] shadow transition-all flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <span>➕ Register New Customer (Society)</span>
+              </button>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newSocName.trim()) return;
+                  const wings = newSocWingsList.split(',').map(w => w.trim()).filter(w => w !== '');
+                  handleCreateSociety(newSocName.trim(), newSocType, newSocAddress.trim(), wings, newSocHasWings);
+                  setNewSocName('');
+                  setNewSocAddress('');
+                  setNewSocWingsList('A, B, C');
+                  setShowRegisterSociety(false);
+                }}
+                className={`mt-2 p-2.5 rounded-lg border text-[10px] space-y-2 ${
+                  theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="font-bold text-slate-400 select-none border-b pb-1 mb-1.5 uppercase tracking-wider text-[9px] flex justify-between items-center">
+                  <span>Register Society (Super-Admin)</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterSociety(false)}
+                    className="text-rose-500 hover:text-rose-600 font-bold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold block">Society / Customer Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Greenwood Residency"
+                    value={newSocName}
+                    onChange={(e) => setNewSocName(e.target.value)}
+                    className={`w-full p-1.5 rounded border focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800'
+                    }`}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold block">Property Type</label>
+                  <select
+                    value={newSocType}
+                    onChange={(e) => setNewSocType(e.target.value)}
+                    className={`w-full p-1.5 rounded border focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800'
+                    }`}
+                  >
+                    <option value="Housing Society">Housing Society</option>
+                    <option value="Apartment Complex">Apartment Complex</option>
+                    <option value="Gated Community">Gated Community</option>
+                    <option value="Residential Co-operative">Residential Co-operative</option>
+                    <option value="Commercial Complex">Commercial Complex</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold block">Postal Address</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Sector 5, Mumbai, MH - 400001"
+                    value={newSocAddress}
+                    onChange={(e) => setNewSocAddress(e.target.value)}
+                    className={`w-full p-1.5 rounded border focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800'
+                    }`}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="devHasWings"
+                    checked={newSocHasWings}
+                    onChange={(e) => setNewSocHasWings(e.target.checked)}
+                    className="rounded text-purple-600 focus:ring-purple-500"
+                  />
+                  <label htmlFor="devHasWings" className="font-bold select-none cursor-pointer text-slate-400">Has Wing Blocks?</label>
+                </div>
+
+                {newSocHasWings && (
+                  <div className="space-y-1 animate-fadeIn">
+                    <label className="font-bold block">Wing Names (comma separated)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. A, B, C"
+                      value={newSocWingsList}
+                      onChange={(e) => setNewSocWingsList(e.target.value)}
+                      className={`w-full p-1.5 rounded border font-mono focus:outline-none focus:ring-1 focus:ring-purple-500 ${
+                        theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-white border-slate-300 text-slate-800'
+                      }`}
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-1.5 rounded shadow mt-1 cursor-pointer transition-all text-center"
+                >
+                  🚀 Register & Switch Active
+                </button>
+              </form>
+            )}
+
+            <div className={`flex justify-between items-center text-[10px] ${theme === 'dark' ? 'text-slate-500 border-slate-800/40' : 'text-slate-400 border-slate-200'} border-t pt-2 select-none`}>
+              <span>Gate Passcode: <strong className={theme === 'dark' ? 'text-slate-400 font-mono' : 'text-slate-600 font-mono'}>admin123</strong></span>
               <span>•</span>
               <span>Pull to refresh / load notices</span>
             </div>
@@ -1053,13 +1247,14 @@ export default function App() {
             supabaseUrl={supabaseUrl}
             supabaseAnonKey={supabaseAnonKey}
             onPushMockData={pushMockDataToSupabase}
+            theme={theme}
           />
         </div>
 
       </main>
 
       {/* Mini Info Footer - Hidden on Mobile */}
-      <footer className="hidden lg:block bg-slate-950 py-3.5 px-6 border-t border-slate-900 text-center text-slate-500 text-[11px] font-medium flex-shrink-0">
+      <footer className={`hidden lg:block ${theme === 'dark' ? 'bg-slate-950 border-slate-900 text-slate-500' : 'bg-white border-slate-200 text-slate-400 shadow-inner'} py-3.5 px-6 border-t text-center text-[11px] font-medium flex-shrink-0 transition-colors duration-300`}>
         Designed for Expo SDK 51 & Supabase REST API Backend • No paid tiers or third-party native modules required.
       </footer>
     </div>

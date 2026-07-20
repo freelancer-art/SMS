@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Ensure all inputs, select options, and textareas have high-contrast, dark slate text by default to avoid low contrast issues */
+input, select, textarea, option {
+  color: #1e293b !important; /* slate-800 */
+}

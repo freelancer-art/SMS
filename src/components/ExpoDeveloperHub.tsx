@@ -18,13 +18,15 @@ interface ExpoDeveloperHubProps {
   supabaseUrl: string;
   supabaseAnonKey: string;
   onPushMockData: () => Promise<{ success: boolean; error?: string }>;
+  theme?: 'light' | 'dark';
 }
 
 export default function ExpoDeveloperHub({ 
   onSetSupabase, 
   supabaseUrl, 
   supabaseAnonKey, 
-  onPushMockData 
+  onPushMockData,
+  theme = 'dark'
 }: ExpoDeveloperHubProps) {
   const [activeHubTab, setActiveHubTab] = useState<'guide' | 'code'>('guide');
   const [activeCodeFile, setActiveCodeFile] = useState<'app' | 'api' | 'package' | 'schema'>('app');
@@ -87,25 +89,27 @@ export default function ExpoDeveloperHub({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 border-l border-slate-800 text-slate-100 overflow-hidden font-sans">
+    <div className={`flex flex-col h-full ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'} border-l overflow-hidden font-sans transition-all duration-300`}>
       {/* Dev Hub Header */}
-      <div className="p-4 border-b border-slate-800 bg-slate-950 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+      <div className={`p-4 border-b ${theme === 'dark' ? 'border-slate-800 bg-slate-950' : 'border-slate-200 bg-slate-50'} flex flex-col md:flex-row justify-between items-start md:items-center gap-3 transition-colors duration-300`}>
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2 py-0.5 bg-purple-600/30 text-purple-400 border border-purple-500/30 rounded-full text-xs font-semibold uppercase tracking-wider flex items-center gap-1">
               <Sparkles className="w-3 h-3" /> Expo Developer Hub
             </span>
           </div>
-          <h2 className="text-lg font-bold text-slate-100 mt-1">Greenwood Society Connect</h2>
+          <h2 className={`text-lg font-bold ${theme === 'dark' ? 'text-slate-100' : 'text-slate-800'} mt-1`}>Greenwood Society Connect</h2>
         </div>
 
-        <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+        <div className={`flex ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'} p-1 rounded-lg border transition-all duration-300`}>
           <button
             onClick={() => setActiveHubTab('guide')}
-            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
               activeHubTab === 'guide'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-purple-600 text-white shadow-sm font-semibold'
+                : theme === 'dark' 
+                  ? 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -113,10 +117,12 @@ export default function ExpoDeveloperHub({
           </button>
           <button
             onClick={() => setActiveHubTab('code')}
-            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+            className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
               activeHubTab === 'code'
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-purple-600 text-white shadow-sm font-semibold'
+                : theme === 'dark' 
+                  ? 'text-slate-400 hover:text-slate-200'
+                  : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Code2 className="w-3.5 h-3.5" />

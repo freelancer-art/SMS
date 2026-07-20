@@ -30,7 +30,9 @@ import {
   Bell,
   Building2,
   MapPin,
-  Layers
+  Layers,
+  Car,
+  Save
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -39,7 +41,11 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer 
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Legend
 } from 'recharts';
 import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog } from '../types';
 
@@ -63,6 +69,7 @@ interface MobileSimulatorProps {
   buildingType: string;
   onUpdateSocietySettings: (name: string, wingsEnabled: boolean, wings: string[], postalAddress: string, buildingType: string) => void;
   onSaveOrUpdateMember: (member: Member) => void;
+  onAddNotice?: (notice: { title: string; category: string; content: string }) => void;
   lastSynced?: string;
   societies?: Society[];
   activeSocietyId?: string;
@@ -90,6 +97,7 @@ export default function MobileSimulator({
   buildingType,
   onUpdateSocietySettings,
   onSaveOrUpdateMember,
+  onAddNotice,
   lastSynced,
   societies = [],
   activeSocietyId = 'greenwood',
@@ -174,11 +182,25 @@ export default function MobileSimulator({
   const [autoNoticeTitle, setAutoNoticeTitle] = useState('');
   const [autoNoticeContent, setAutoNoticeContent] = useState('');
 
+  // Broadcast Notice Modal States
+  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
+  const [newNoticeTitle, setNewNoticeTitle] = useState('');
+  const [newNoticeCategory, setNewNoticeCategory] = useState<'General' | 'Maintenance' | 'Meeting' | 'Event' | 'Security'>('General');
+  const [newNoticeContent, setNewNoticeContent] = useState('');
+
   // Custom states for Audit log view and Member dues UPI pay modal
   const [showAuditLogsModal, setShowAuditLogsModal] = useState(false);
   const [showMemberPayModal, setShowMemberPayModal] = useState(false);
   const [memberPayAmount, setMemberPayAmount] = useState('');
   const [memberPayMode, setMemberPayMode] = useState<'UPI' | 'Card' | 'Netbanking'>('UPI');
+
+  // Inline Member Edit States
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editBalance, setEditBalance] = useState<number>(0);
+  const [editVehicle, setEditVehicle] = useState('');
 
   // Form Field States
   const [payFlatNo, setPayFlatNo] = useState('');
@@ -204,13 +226,6 @@ export default function MobileSimulator({
   const [tempWingsList, setTempWingsList] = useState(wingsList.join(', '));
   const [tempPostalAddress, setTempPostalAddress] = useState(postalAddress);
   const [tempBuildingType, setTempBuildingType] = useState(buildingType);
-
-  const [isCreatingNewSociety, setIsCreatingNewSociety] = useState(false);
-  const [newSocName, setNewSocName] = useState('');
-  const [newSocType, setNewSocType] = useState('Housing Society');
-  const [newSocAddress, setNewSocAddress] = useState('');
-  const [newSocHasWings, setNewSocHasWings] = useState(true);
-  const [newSocWingsList, setNewSocWingsList] = useState('A, B');
 
   // Sync temp values when societyName/hasWings/wingsList changes from outside
   useEffect(() => {
@@ -327,7 +342,7 @@ export default function MobileSimulator({
     setSyncing(true);
     await onRefresh();
     setSyncing(false);
-    triggerToast(scriptUrl ? 'Synced with Google Sheet!' : 'Mock Sandbox refreshed');
+    triggerToast(scriptUrl ? 'Synced with Database!' : 'Mock Sandbox refreshed');
   };
 
   // Society settings submit
@@ -337,25 +352,6 @@ export default function MobileSimulator({
     onUpdateSocietySettings(tempSocietyName, tempHasWings, wings, tempPostalAddress, tempBuildingType);
     setShowSettingsModal(false);
     triggerToast('Society settings updated!');
-  };
-
-  const handleCreateNewSocietySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSocName.trim()) {
-      triggerToast('Society Name is required');
-      return;
-    }
-    const wings = newSocWingsList.split(',').map(w => w.trim()).filter(w => w !== '');
-    if (onCreateSociety) {
-      onCreateSociety(newSocName.trim(), newSocType, newSocAddress.trim(), wings, newSocHasWings);
-      setShowSettingsModal(false);
-      setIsCreatingNewSociety(false);
-      // Reset fields
-      setNewSocName('');
-      setNewSocAddress('');
-      setNewSocWingsList('A, B');
-      triggerToast(`Society "${newSocName}" created and loaded!`);
-    }
   };
 
   // Member form actions
@@ -551,6 +547,24 @@ export default function MobileSimulator({
     const bal = parseFloat(String(m.Balance || 0)) || 0;
     return sum + (bal > 0 ? bal : 0);
   }, 0);
+
+  const totalPrepaidDues = (Array.isArray(members) ? members : []).reduce((sum, m) => {
+    if (!m) return sum;
+    const bal = parseFloat(String(m.Balance || 0)) || 0;
+    return sum + (bal < 0 ? Math.abs(bal) : 0);
+  }, 0);
+
+  const clearedCount = (Array.isArray(members) ? members : []).filter(m => {
+    if (!m) return false;
+    const bal = parseFloat(String(m.Balance || 0)) || 0;
+    return bal <= 0;
+  }).length;
+
+  const pendingCount = (Array.isArray(members) ? members : []).filter(m => {
+    if (!m) return false;
+    const bal = parseFloat(String(m.Balance || 0)) || 0;
+    return bal > 0;
+  }).length;
 
   // Helper to group payments/expenses by month
   const getMonthlyChartData = () => {
@@ -930,6 +944,8 @@ export default function MobileSimulator({
                         setTempSocietyName(societyName);
                         setTempHasWings(hasWings);
                         setTempWingsList(wingsList.join(', '));
+                        setTempPostalAddress(postalAddress);
+                        setTempBuildingType(buildingType);
                         setShowSettingsModal(true);
                       }}
                       className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
@@ -942,7 +958,7 @@ export default function MobileSimulator({
                     onClick={handleManualRefresh}
                     disabled={syncing}
                     className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
-                    title="Pull-to-Refresh from Sheets"
+                    title="Pull-to-Refresh from Database"
                   >
                     <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin text-purple-600' : ''}`} />
                   </button>
@@ -957,11 +973,11 @@ export default function MobileSimulator({
                 </div>
               </div>
 
-              {/* Loader overlay for sheet sync */}
+              {/* Loader overlay for database sync */}
               {syncing && (
                 <div className="absolute inset-0 bg-white/70 flex flex-col items-center justify-center z-50">
                   <RefreshCw className="w-8 h-8 text-purple-600 animate-spin" />
-                  <span className="text-xs font-bold text-slate-600 mt-2">Syncing with Spreadsheet...</span>
+                  <span className="text-xs font-bold text-slate-600 mt-2">Syncing with Database...</span>
                 </div>
               )}
 
@@ -1139,6 +1155,28 @@ export default function MobileSimulator({
                     ) : (
                       /* COMMITTEE ADMIN DASHBOARD */
                       <>
+                        {/* Broadcast Notice Quick Action */}
+                        <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-3 rounded-2xl text-white shadow-xs flex items-center justify-between">
+                          <div className="max-w-[190px]">
+                            <span className="text-[7px] font-black tracking-widest bg-white/20 px-1.5 py-0.5 rounded-full uppercase">Quick Action</span>
+                            <h4 className="text-[10px] font-black mt-1">Broadcast Notice</h4>
+                            <p className="text-[7.5px] text-purple-100 font-medium mt-0.5 leading-snug">Announce general meetings, maintenance schedules, or security alerts.</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setNewNoticeTitle('');
+                              setNewNoticeContent('');
+                              setNewNoticeCategory('General');
+                              setIsBroadcastModalOpen(true);
+                            }}
+                            id="dashboard-broadcast-notice-btn"
+                            className="bg-white text-indigo-600 hover:bg-slate-50 active:scale-95 px-2.5 py-1.5 rounded-xl text-[8.5px] font-extrabold transition-all flex items-center gap-1 shadow-xs cursor-pointer whitespace-nowrap"
+                          >
+                            <Megaphone className="w-3 h-3 text-indigo-500 animate-pulse" />
+                            <span>Post Notice</span>
+                          </button>
+                        </div>
+
                         {/* Financial Summary Cards */}
                         <div className="grid grid-cols-3 gap-1.5">
                           <div className="bg-emerald-50 border border-emerald-100/50 p-2 rounded-xl text-center shadow-2xs">
@@ -1241,6 +1279,79 @@ export default function MobileSimulator({
                           </div>
                         )}
 
+                        {/* Dues Clearance & Distribution Visual Summary */}
+                        <div className="bg-white p-2.5 rounded-2xl border border-slate-150 shadow-xs">
+                          <div className="flex justify-between items-center mb-1.5 px-0.5">
+                            <div>
+                              <h4 className="text-[10px] font-extrabold text-slate-700">Dues Collection & Clearance Summary</h4>
+                              <p className="text-[8px] text-slate-400 font-semibold">Cleared vs. Outstanding billing distribution</p>
+                            </div>
+                            <span className="text-[7px] font-bold bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full border border-indigo-100/50 uppercase">Distribution</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 items-center">
+                            {/* Outstanding Dues Visual Summary Block */}
+                            <div className="space-y-1.5">
+                              <div className="bg-rose-50 border border-rose-100 p-1.5 rounded-xl">
+                                <span className="text-[7px] text-rose-500 uppercase font-black tracking-wider block">Outstanding Dues</span>
+                                <span className="text-[11px] font-black text-rose-600">₹{totalPendingDues.toLocaleString()}</span>
+                                <span className="text-[6.5px] text-slate-400 font-semibold block mt-0.5">Total due from {pendingCount} flats</span>
+                              </div>
+                              <div className="bg-emerald-50 border border-emerald-100 p-1.5 rounded-xl">
+                                <span className="text-[7px] text-emerald-600 uppercase font-black tracking-wider block">Prepaid Credits</span>
+                                <span className="text-[11px] font-black text-emerald-600">₹{totalPrepaidDues.toLocaleString()}</span>
+                                <span className="text-[6.5px] text-slate-400 font-semibold block mt-0.5 font-sans">Advance payments</span>
+                              </div>
+                            </div>
+
+                            {/* Recharts Pie Chart */}
+                            <div className="relative flex flex-col items-center justify-center h-[90px] w-full">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={[
+                                      { name: 'Cleared', value: clearedCount || 1, color: '#10b981' },
+                                      { name: 'Pending', value: pendingCount || 0, color: '#f43f5e' }
+                                    ]}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={20}
+                                    outerRadius={35}
+                                    paddingAngle={3}
+                                    dataKey="value"
+                                  >
+                                    <Cell fill="#10b981" />
+                                    <Cell fill="#f43f5e" />
+                                  </Pie>
+                                  <Tooltip
+                                    formatter={(value: any, name: any) => [`${value} Flats`, name]}
+                                    contentStyle={{ backgroundColor: '#1e293b', borderRadius: '6px', border: 'none', color: '#fff', fontSize: '8px', padding: '2px 6px' }}
+                                  />
+                                </PieChart>
+                              </ResponsiveContainer>
+                              {/* Inner Label for Percent */}
+                              <div className="absolute text-center">
+                                <span className="text-[10px] font-black text-slate-700">
+                                  {members.length > 0 ? ((clearedCount / members.length) * 100).toFixed(0) : '0'}%
+                                </span>
+                                <span className="text-[6px] text-slate-400 font-extrabold uppercase block leading-none">Cleared</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Legend / Stats line */}
+                          <div className="flex items-center justify-around border-t border-slate-100 pt-2 mt-1.5 text-[8px] font-extrabold">
+                            <div className="flex items-center gap-1 text-slate-600">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                              <span>Cleared: {clearedCount} flats</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-slate-600">
+                              <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                              <span>Pending: {pendingCount} flats</span>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Expense Categories Breakdown */}
                         <div className="bg-white p-2.5 rounded-2xl border border-slate-150 shadow-xs">
                           <h4 className="text-[10px] font-extrabold text-slate-700 mb-1.5 px-0.5">Expense Categories Breakdown</h4>
@@ -1264,25 +1375,6 @@ export default function MobileSimulator({
                             ) : (
                               <p className="text-center text-[10px] text-slate-400 py-3">No expenses recorded yet.</p>
                             )}
-                          </div>
-                        </div>
-
-                        {/* Maintenance Dues Summary */}
-                        <div className="bg-purple-50/50 border border-purple-100 p-2 rounded-xl shadow-xs">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="p-1 bg-purple-100 text-purple-700 rounded-lg">
-                                <Users className="w-3.5 h-3.5" />
-                              </div>
-                              <div>
-                                <h4 className="text-[10px] font-black text-slate-700">Dues Collection Status</h4>
-                                <p className="text-[8px] text-slate-400 font-medium">Total outstanding maintenance dues from flats</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-[11px] font-black text-rose-600">₹{totalPendingDues.toLocaleString()}</p>
-                              <p className="text-[6px] text-rose-500 font-bold uppercase tracking-wider">Outstanding</p>
-                            </div>
                           </div>
                         </div>
 
@@ -1376,39 +1468,196 @@ export default function MobileSimulator({
                     )}
 
                     {/* Members list */}
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {filteredMembers.length > 0 ? (
-                        filteredMembers.map((member) => (
-                          <div 
-                            key={member.FlatNo}
-                            onClick={() => setActiveMemberDetail(member)}
-                            className="bg-white p-3 rounded-xl border border-slate-150 hover:border-purple-200 transition-colors cursor-pointer shadow-xs flex items-center justify-between"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-full bg-purple-100/80 text-purple-700 flex flex-col items-center justify-center font-bold text-xs border border-purple-100 leading-none">
-                                {hasWings && member.Wing ? (
-                                  <>
-                                    <span className="text-[7px] text-purple-500 uppercase tracking-widest font-black mb-0.5">{member.Wing}</span>
-                                    <span className="text-[10px] font-extrabold">{member.FlatNo}</span>
-                                  </>
-                                ) : (
-                                  member.FlatNo
+                        filteredMembers.map((member) => {
+                          const isEditing = editingMemberId === member.id;
+                          return (
+                            <div 
+                              key={member.id || member.FlatNo}
+                              className="bg-white p-3.5 rounded-2xl border border-slate-150 shadow-xs flex flex-col gap-2.5 transition-all duration-200"
+                            >
+                              {/* Card Header: Flat, Status, Actions */}
+                              <div className="flex justify-between items-start border-b border-slate-100 pb-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex flex-col items-center justify-center font-bold text-xs border border-purple-100/50 leading-none shadow-3xs flex-shrink-0">
+                                    {hasWings && member.Wing ? (
+                                      <>
+                                        <span className="text-[7px] text-purple-500 uppercase tracking-widest font-black mb-0.5">{member.Wing}</span>
+                                        <span className="text-[10px] font-extrabold">{member.FlatNo}</span>
+                                      </>
+                                    ) : (
+                                      <span className="text-[10px] font-extrabold">{member.FlatNo}</span>
+                                    )}
+                                  </div>
+                                  <div>
+                                    {isEditing ? (
+                                      <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="bg-slate-50 border border-slate-200 p-1 rounded font-bold text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        placeholder="Owner Name"
+                                      />
+                                    ) : (
+                                      <h4 className="text-xs font-black text-slate-800">{member.OwnerName}</h4>
+                                    )}
+                                    <div className="flex items-center gap-1 mt-0.5">
+                                      <span className="text-[8px] bg-slate-100 border border-slate-200/50 text-slate-500 font-bold px-1.5 py-0.5 rounded uppercase">
+                                        {member.Status || 'Owner'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Edit / Save Actions */}
+                                {userRole === 'Admin' && (
+                                  <div className="flex items-center gap-1">
+                                    {isEditing ? (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            if (!editName.trim()) {
+                                              triggerToast('Owner Name is required');
+                                              return;
+                                            }
+                                            onSaveOrUpdateMember({
+                                              ...member,
+                                              OwnerName: editName,
+                                              ContactNo: editPhone,
+                                              Email: editEmail,
+                                              Balance: editBalance,
+                                              VehicleNo: editVehicle
+                                            });
+                                            triggerToast('Member details updated!');
+                                            setEditingMemberId(null);
+                                          }}
+                                          className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg border border-emerald-100 cursor-pointer"
+                                          title="Save changes"
+                                        >
+                                          <Save className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => setEditingMemberId(null)}
+                                          className="p-1.5 bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-lg border border-slate-200 cursor-pointer"
+                                          title="Cancel"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          setEditingMemberId(member.id);
+                                          setEditName(member.OwnerName || '');
+                                          setEditPhone(member.ContactNo || '');
+                                          setEditEmail(member.Email || '');
+                                          setEditBalance(member.Balance || 0);
+                                          setEditVehicle(member.VehicleNo || '');
+                                        }}
+                                        className="p-1.5 bg-slate-50 text-slate-500 hover:bg-purple-50 hover:text-purple-700 rounded-lg border border-slate-100 cursor-pointer transition-colors"
+                                        title="Edit Resident"
+                                      >
+                                        <Pencil className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-slate-800">{member.OwnerName}</h4>
-                                <span className="text-[10px] text-slate-400 font-semibold uppercase">{member.Status}</span>
+
+                              {/* Card Body Details: Contact Info, Dues, Vehicle */}
+                              <div className="grid grid-cols-2 gap-2 text-[10px] leading-relaxed">
+                                {/* Left Side: Contact Information */}
+                                <div className="space-y-1 bg-slate-50/50 p-1.5 rounded-xl border border-slate-100">
+                                  <span className="text-[7px] text-slate-400 uppercase font-bold tracking-wider block">Contact Info</span>
+                                  {isEditing ? (
+                                    <div className="space-y-1.5">
+                                      <input
+                                        type="text"
+                                        value={editPhone}
+                                        onChange={(e) => setEditPhone(e.target.value)}
+                                        className="w-full bg-white border border-slate-200 p-1 rounded text-[9px] text-slate-700"
+                                        placeholder="Phone Number"
+                                      />
+                                      <input
+                                        type="email"
+                                        value={editEmail}
+                                        onChange={(e) => setEditEmail(e.target.value)}
+                                        className="w-full bg-white border border-slate-200 p-1 rounded text-[9px] text-slate-700"
+                                        placeholder="Email Address"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-1 text-slate-600 font-medium">
+                                      <div className="flex items-center gap-1.5">
+                                        <Phone className="w-3 h-3 text-slate-400" />
+                                        <span className="truncate">{member.ContactNo || 'Not registered'}</span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <Mail className="w-3 h-3 text-slate-400" />
+                                        <span className="truncate">{member.Email || 'No email saved'}</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Right Side: Dues & Vehicle Info */}
+                                <div className="space-y-1.5">
+                                  {/* Dues Status Block */}
+                                  <div className={`p-1.5 rounded-xl border ${
+                                    member.Balance > 0 
+                                      ? 'bg-rose-50 border-rose-100/50 text-rose-700' 
+                                      : 'bg-emerald-50 border-emerald-100/50 text-emerald-700'
+                                  }`}>
+                                    <span className="text-[7px] uppercase font-bold tracking-wider block">Maintenance Dues</span>
+                                    {isEditing ? (
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <span className="text-[9px] font-bold">₹</span>
+                                        <input
+                                          type="number"
+                                          value={editBalance}
+                                          onChange={(e) => setEditBalance(parseFloat(e.target.value) || 0)}
+                                          className="w-full bg-white border border-slate-200 p-0.5 rounded text-[9px] text-slate-800"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="flex justify-between items-baseline mt-0.5">
+                                        <span className="text-xs font-black">
+                                          {member.Balance > 0 ? `₹${member.Balance.toLocaleString()}` : (member.Balance < 0 ? `-₹${Math.abs(member.Balance).toLocaleString()}` : 'No Dues')}
+                                        </span>
+                                        <span className="text-[6.5px] uppercase font-black tracking-wider opacity-70">
+                                          {member.Balance > 0 ? 'Pending' : (member.Balance < 0 ? 'Prepaid' : 'Cleared')}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Registered Vehicle Block */}
+                                  <div className="bg-slate-50 p-1.5 rounded-xl border border-slate-150">
+                                    <span className="text-[7px] text-slate-400 uppercase font-bold tracking-wider block mb-0.5">Vehicle License</span>
+                                    {isEditing ? (
+                                      <input
+                                        type="text"
+                                        value={editVehicle}
+                                        onChange={(e) => setEditVehicle(e.target.value)}
+                                        className="w-full bg-white border border-slate-200 p-1 rounded text-[9px] text-slate-700"
+                                        placeholder="e.g. MH-12-AB-1234"
+                                      />
+                                    ) : member.VehicleNo ? (
+                                      /* Professional license plate style tag */
+                                      <div className="inline-flex items-center gap-1.5 bg-yellow-50 text-slate-800 border-2 border-slate-800 rounded px-1.5 py-0.5 text-[8.5px] font-black uppercase font-mono shadow-3xs">
+                                        <Car className="w-2.5 h-2.5 text-slate-700" />
+                                        <span>{member.VehicleNo}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400 text-[8px] font-semibold italic">No vehicle listed</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-
-                            <div className="text-right">
-                              <span className={`text-xs font-extrabold ${member.Balance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                {member.Balance > 0 ? `₹${member.Balance}` : (member.Balance < 0 ? `-₹${Math.abs(member.Balance)}` : 'Clear')}
-                              </span>
-                              <p className="text-[9px] text-slate-400 font-medium">Dues</p>
-                            </div>
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-250 text-slate-400">
                           <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
@@ -1946,7 +2195,7 @@ export default function MobileSimulator({
                             }}
                             className="sr-only peer"
                           />
-                          <div className="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-350 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
+                          <div className="w-7 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-green-600"></div>
                         </label>
                       </div>
 
@@ -1986,7 +2235,7 @@ export default function MobileSimulator({
                               type="text"
                               value={autoNoticeTitle}
                               onChange={(e) => setAutoNoticeTitle(e.target.value)}
-                              className="w-full bg-white border border-slate-350 p-1.5 rounded focus:outline-none"
+                              className="w-full bg-white border border-slate-300 p-1.5 rounded focus:outline-none"
                             />
                           </div>
 
@@ -1996,7 +2245,7 @@ export default function MobileSimulator({
                               value={autoNoticeContent}
                               onChange={(e) => setAutoNoticeContent(e.target.value)}
                               rows={3}
-                              className="w-full bg-white border border-slate-350 p-1.5 rounded focus:outline-none font-sans leading-relaxed"
+                              className="w-full bg-white border border-slate-300 p-1.5 rounded focus:outline-none font-sans leading-relaxed"
                             />
                           </div>
 
@@ -2102,7 +2351,7 @@ export default function MobileSimulator({
                     placeholder="e.g. 101, 203"
                     value={payFlatNo}
                     onChange={(e) => setPayFlatNo(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2114,7 +2363,7 @@ export default function MobileSimulator({
                     placeholder="e.g. 1500"
                     value={payAmount}
                     onChange={(e) => setPayAmount(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2145,7 +2394,7 @@ export default function MobileSimulator({
                     placeholder="UPI txn code or Cheque no."
                     value={payRef}
                     onChange={(e) => setPayRef(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2175,7 +2424,7 @@ export default function MobileSimulator({
                   <select
                     value={expCategory}
                     onChange={(e) => setExpCategory(e.target.value as any)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   >
                     {['Maintenance', 'Security', 'Water', 'Electricity', 'Repairs', 'Gardening', 'Salary', 'Others'].map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -2191,7 +2440,7 @@ export default function MobileSimulator({
                     placeholder="e.g. 8500"
                     value={expAmount}
                     onChange={(e) => setExpAmount(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2203,7 +2452,7 @@ export default function MobileSimulator({
                     placeholder="Company or Service provider"
                     value={expVendor}
                     onChange={(e) => setExpVendor(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2214,7 +2463,7 @@ export default function MobileSimulator({
                     placeholder="e.g. INV-2026-14"
                     value={expInvoice}
                     onChange={(e) => setExpInvoice(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2247,7 +2496,7 @@ export default function MobileSimulator({
                     placeholder="e.g. 102"
                     value={compFlatNo}
                     onChange={(e) => setCompFlatNo(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2256,7 +2505,7 @@ export default function MobileSimulator({
                   <select
                     value={compCategory}
                     onChange={(e) => setCompCategory(e.target.value as any)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   >
                     {['Plumbing', 'Electrical', 'Security', 'Cleanliness', 'Parking', 'Noisy Neighbor', 'Others'].map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -2272,7 +2521,7 @@ export default function MobileSimulator({
                     placeholder="Short summary"
                     value={compTitle}
                     onChange={(e) => setCompTitle(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2284,7 +2533,7 @@ export default function MobileSimulator({
                     value={compDesc}
                     onChange={(e) => setCompDesc(e.target.value)}
                     rows={4}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none"
                   />
                 </div>
 
@@ -2318,6 +2567,99 @@ export default function MobileSimulator({
             </div>
           )}
 
+          {/* Broadcast Notice Modal Popup */}
+          {isBroadcastModalOpen && (
+            <div className="absolute inset-0 bg-white z-50 flex flex-col text-xs">
+              <div className="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <div className="flex items-center gap-1.5">
+                  <Megaphone className="w-4 h-4 text-purple-600" />
+                  <h3 className="font-bold text-slate-700">Broadcast Committee Notice</h3>
+                </div>
+                <button onClick={() => setIsBroadcastModalOpen(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newNoticeTitle.trim() || !newNoticeContent.trim()) {
+                    triggerToast('Title and content are required!');
+                    return;
+                  }
+                  if (onAddNotice) {
+                    onAddNotice({
+                      title: newNoticeTitle,
+                      category: newNoticeCategory,
+                      content: newNoticeContent
+                    });
+                    triggerToast('Notice broadcast successfully!');
+                    setIsBroadcastModalOpen(false);
+                    setNewNoticeTitle('');
+                    setNewNoticeContent('');
+                    setNewNoticeCategory('General');
+                  } else {
+                    triggerToast('Notice service unavailable');
+                  }
+                }} 
+                className="flex-1 p-4 space-y-4 overflow-y-auto"
+              >
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Notice Category</label>
+                  <select
+                    value={newNoticeCategory}
+                    onChange={(e) => setNewNoticeCategory(e.target.value as any)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+                  >
+                    {['General', 'Maintenance', 'Meeting', 'Event', 'Security'].map(cat => (
+                      <option key={cat} value={cat}>{cat} Notice</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Notice Title / Subject</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Annual General Body Meeting (AGM)"
+                    value={newNoticeTitle}
+                    onChange={(e) => setNewNoticeTitle(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-semibold text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Announcement Content</label>
+                  <textarea
+                    required
+                    rows={8}
+                    placeholder="Provide the detailed notice, schedules, notes, or instructions for the society residents..."
+                    value={newNoticeContent}
+                    onChange={(e) => setNewNoticeContent(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none font-medium leading-relaxed"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBroadcastModalOpen(false)}
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold transition-all border border-slate-200"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2.5 rounded-xl font-bold transition-all shadow"
+                  >
+                    Post Notice
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
           {/* Society & Wings Settings Modal Popup */}
           {showSettingsModal && (
             <div className="absolute inset-0 bg-white z-50 flex flex-col text-xs">
@@ -2326,7 +2668,6 @@ export default function MobileSimulator({
                 <button
                   onClick={() => {
                     setShowSettingsModal(false);
-                    setIsCreatingNewSociety(false);
                   }}
                   className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
@@ -2334,224 +2675,98 @@ export default function MobileSimulator({
                 </button>
               </div>
 
-              {/* Multi-Tenant Toggle Tabs */}
-              {onCreateSociety && (
-                <div className="flex border-b border-slate-200 bg-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsCreatingNewSociety(false)}
-                    className={`flex-1 py-2.5 text-center font-bold border-b-2 transition-all ${
-                      !isCreatingNewSociety
-                        ? 'border-purple-600 text-purple-700 bg-white'
-                        : 'border-transparent text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    ⚙️ Configure Active
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsCreatingNewSociety(true)}
-                    className={`flex-1 py-2.5 text-center font-bold border-b-2 transition-all ${
-                      isCreatingNewSociety
-                        ? 'border-purple-600 text-purple-700 bg-white'
-                        : 'border-transparent text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    ➕ Register New Society
-                  </button>
+              {/* EDIT ACTIVE SOCIETY FORM */}
+              <form onSubmit={handleSaveSocietySettings} className="flex-1 p-4 space-y-4 overflow-y-auto">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 block">Society Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Greenwood Residency"
+                    value={tempSocietyName}
+                    onChange={(e) => setTempSocietyName(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-slate-800"
+                  />
                 </div>
-              )}
 
-              {!isCreatingNewSociety ? (
-                /* EDIT ACTIVE SOCIETY FORM */
-                <form onSubmit={handleSaveSocietySettings} className="flex-1 p-4 space-y-4 overflow-y-auto">
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Society Name</label>
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 block">Building / Property Type</label>
+                  <select
+                    value={tempBuildingType}
+                    onChange={(e) => setTempBuildingType(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-slate-800"
+                  >
+                    <option value="Housing Society">Housing Society</option>
+                    <option value="Apartment Complex">Apartment Complex</option>
+                    <option value="Gated Community">Gated Community</option>
+                    <option value="Residential Co-operative">Residential Co-operative</option>
+                    <option value="Commercial Complex">Commercial Complex</option>
+                    <option value="Others">Others</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 block">Postal Address</label>
+                  <textarea
+                    required
+                    placeholder="e.g. 123 Greenwood Road, Sector 5, Mumbai, MH - 400001"
+                    value={tempPostalAddress}
+                    onChange={(e) => setTempPostalAddress(e.target.value)}
+                    rows={2}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium resize-none text-slate-800"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-600 block">Wing Subdivisions</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTempHasWings(false)}
+                      className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
+                        !tempHasWings
+                          ? 'bg-purple-100 border-purple-400 text-purple-700'
+                          : 'bg-white border-slate-200 text-slate-500'
+                      }`}
+                    >
+                      Single Block
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTempHasWings(true)}
+                      className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
+                        tempHasWings
+                          ? 'bg-purple-100 border-purple-400 text-purple-700'
+                          : 'bg-white border-slate-200 text-slate-500'
+                      }`}
+                    >
+                      Has Wings (A, B, C)
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Enable wings if your society is divided into multiple independent blocks or wings.</p>
+                </div>
+
+                {tempHasWings && (
+                  <div className="space-y-1.5 animate-fadeIn">
+                    <label className="font-bold text-slate-600 block">Define Wing Names</label>
                     <input
                       type="text"
-                      required
-                      placeholder="e.g. Greenwood Residency"
-                      value={tempSocietyName}
-                      onChange={(e) => setTempSocietyName(e.target.value)}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+                      placeholder="e.g. A, B, C, D"
+                      value={tempWingsList}
+                      onChange={(e) => setTempWingsList(e.target.value)}
+                      className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-slate-800"
                     />
+                    <p className="text-[9px] text-slate-400">Separate wings using commas (e.g., A, B, C or Wing A, Wing B).</p>
                   </div>
+                )}
 
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Building / Property Type</label>
-                    <select
-                      value={tempBuildingType}
-                      onChange={(e) => setTempBuildingType(e.target.value)}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
-                    >
-                      <option value="Housing Society">Housing Society</option>
-                      <option value="Apartment Complex">Apartment Complex</option>
-                      <option value="Gated Community">Gated Community</option>
-                      <option value="Residential Co-operative">Residential Co-operative</option>
-                      <option value="Commercial Complex">Commercial Complex</option>
-                      <option value="Others">Others</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Postal Address</label>
-                    <textarea
-                      required
-                      placeholder="e.g. 123 Greenwood Road, Sector 5, Mumbai, MH - 400001"
-                      value={tempPostalAddress}
-                      onChange={(e) => setTempPostalAddress(e.target.value)}
-                      rows={2}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium resize-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Wing Subdivisions</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setTempHasWings(false)}
-                        className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
-                          !tempHasWings
-                            ? 'bg-purple-100 border-purple-400 text-purple-700'
-                            : 'bg-white border-slate-200 text-slate-500'
-                        }`}
-                      >
-                        Single Block
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTempHasWings(true)}
-                        className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
-                          tempHasWings
-                            ? 'bg-purple-100 border-purple-400 text-purple-700'
-                            : 'bg-white border-slate-200 text-slate-500'
-                        }`}
-                      >
-                        Has Wings (A, B, C)
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-slate-400 mt-1">Enable wings if your society is divided into multiple independent blocks or wings.</p>
-                  </div>
-
-                  {tempHasWings && (
-                    <div className="space-y-1.5 animate-fadeIn">
-                      <label className="font-bold text-slate-600 block">Define Wing Names</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. A, B, C, D"
-                        value={tempWingsList}
-                        onChange={(e) => setTempWingsList(e.target.value)}
-                        className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
-                      />
-                      <p className="text-[9px] text-slate-400">Separate wings using commas (e.g., A, B, C or Wing A, Wing B).</p>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-all"
-                  >
-                    Save Society Configurations
-                  </button>
-                </form>
-              ) : (
-                /* CREATE NEW SOCIETY FORM */
-                <form onSubmit={handleCreateNewSocietySubmit} className="flex-1 p-4 space-y-4 overflow-y-auto">
-                  <div className="p-3 bg-purple-50 text-purple-800 rounded-xl border border-purple-100 mb-2">
-                    <p className="font-bold text-[10px] uppercase tracking-wider">Multi-Tenant Tenant Creator</p>
-                    <p className="text-[9px] text-purple-700/80 mt-0.5">Creating a new housing society instantly allocates a secure tenant ID and seeds a welcome bulletin.</p>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">New Society Name</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Royal Heights Co-op"
-                      value={newSocName}
-                      onChange={(e) => setNewSocName(e.target.value)}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Building / Property Type</label>
-                    <select
-                      value={newSocType}
-                      onChange={(e) => setNewSocType(e.target.value)}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
-                    >
-                      <option value="Housing Society">Housing Society</option>
-                      <option value="Apartment Complex">Apartment Complex</option>
-                      <option value="Gated Community">Gated Community</option>
-                      <option value="Residential Co-operative">Residential Co-operative</option>
-                      <option value="Commercial Complex">Commercial Complex</option>
-                      <option value="Others">Others</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Postal Address</label>
-                    <textarea
-                      required
-                      placeholder="e.g. Plot 45, Sector 12, Kharghar, Navi Mumbai"
-                      value={newSocAddress}
-                      onChange={(e) => setNewSocAddress(e.target.value)}
-                      rows={2}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium resize-none"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="font-bold text-slate-600 block">Wing Subdivisions</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setNewSocHasWings(false)}
-                        className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
-                          !newSocHasWings
-                            ? 'bg-purple-100 border-purple-400 text-purple-700'
-                            : 'bg-white border-slate-200 text-slate-500'
-                        }`}
-                      >
-                        Single Block
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewSocHasWings(true)}
-                        className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
-                          newSocHasWings
-                            ? 'bg-purple-100 border-purple-400 text-purple-700'
-                            : 'bg-white border-slate-200 text-slate-500'
-                        }`}
-                      >
-                        Has Wings (A, B)
-                      </button>
-                    </div>
-                  </div>
-
-                  {newSocHasWings && (
-                    <div className="space-y-1.5 animate-fadeIn">
-                      <label className="font-bold text-slate-600 block">Define Wing Names</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. A, B, C"
-                        value={newSocWingsList}
-                        onChange={(e) => setNewSocWingsList(e.target.value)}
-                        className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
-                      />
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-all"
-                  >
-                    🚀 Create & Switch to Society
-                  </button>
-                </form>
-              )}
+                <button
+                  type="submit"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-all"
+                >
+                  Save Society Configurations
+                </button>
+              </form>
             </div>
           )}
 
@@ -2576,7 +2791,7 @@ export default function MobileSimulator({
                       value={memFlatNo}
                       onChange={(e) => setMemFlatNo(e.target.value)}
                       disabled={isEditingMember}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:text-slate-500 font-bold"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:text-slate-500 font-bold"
                     />
                   </div>
 
@@ -2586,7 +2801,7 @@ export default function MobileSimulator({
                       <select
                         value={memWing}
                         onChange={(e) => setMemWing(e.target.value)}
-                        className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+                        className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
                       >
                         {wingsList.map(wing => (
                           <option key={wing} value={wing}>Wing {wing}</option>
@@ -2614,7 +2829,7 @@ export default function MobileSimulator({
                     placeholder="e.g. Ramesh Chandra"
                     value={memOwnerName}
                     onChange={(e) => setMemOwnerName(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
                   />
                 </div>
 
@@ -2624,7 +2839,7 @@ export default function MobileSimulator({
                     <select
                       value={memStatus}
                       onChange={(e) => setMemStatus(e.target.value as any)}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none"
                     >
                       <option value="Owner">Owner</option>
                       <option value="Tenant">Tenant</option>
@@ -2639,7 +2854,7 @@ export default function MobileSimulator({
                       placeholder="e.g. 1500"
                       value={memBalance}
                       onChange={(e) => setMemBalance(e.target.value)}
-                      className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-semibold"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-semibold"
                     />
                   </div>
                 </div>
@@ -2651,7 +2866,7 @@ export default function MobileSimulator({
                     placeholder="e.g. +91 98765 43210"
                     value={memContactNo}
                     onChange={(e) => setMemContactNo(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2662,7 +2877,7 @@ export default function MobileSimulator({
                     placeholder="e.g. ramesh.c@example.com"
                     value={memEmail}
                     onChange={(e) => setMemEmail(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2673,7 +2888,7 @@ export default function MobileSimulator({
                     placeholder="e.g. Sunita Chandra (Spouse)"
                     value={memCoOwners}
                     onChange={(e) => setMemCoOwners(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
 
@@ -2684,7 +2899,7 @@ export default function MobileSimulator({
                     placeholder="e.g. MH-02-AB-1234"
                     value={memVehicleNo}
                     onChange={(e) => setMemVehicleNo(e.target.value)}
-                    className="w-full bg-white border border-slate-350 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 uppercase font-mono"
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 uppercase font-mono"
                   />
                 </div>
 
