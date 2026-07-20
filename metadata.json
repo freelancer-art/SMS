@@ -1,0 +1,6 @@
+{
+  "name": "Society Management System",
+  "description": "An interactive mobile simulator and complete Expo code base for a Google Sheets-backed Housing Society Management System, with features for members, payments, expenses, complaints, and notices.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
