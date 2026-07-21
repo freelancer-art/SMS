@@ -32,7 +32,12 @@ import {
   MapPin,
   Layers,
   Car,
-  Save
+  Save,
+  MessageSquare,
+  Send,
+  ShieldCheck,
+  Home,
+  Calendar
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -47,15 +52,25 @@ import {
   Cell,
   Legend
 } from 'recharts';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth } from '../types';
+import { hashPassword, generateSalt, generateVisitorAccessToken } from '../utils/security';
+import FacilityBookingManager from './FacilityBookingManager';
 
 interface MobileSimulatorProps {
   members: Member[];
+  allMembers?: Member[];
   payments: Payment[];
   expenses: Expense[];
   complaints: Complaint[];
   notices: Notice[];
+  invoices?: Invoice[];
+  visitors?: Visitor[];
+  complaintReplies?: ComplaintReply[];
   auditLogs?: AuditLog[];
+  roles?: Role[];
+  userAuths?: UserAuth[];
+  onUpdateRoles?: (roles: Role[]) => void;
+  onUpdateUserAuths?: (auths: UserAuth[]) => void;
   onAddPayment: (payment: Omit<Payment, 'id'>) => void;
   onAddExpense: (expense: Omit<Expense, 'id'>) => void;
   onAddComplaint: (complaint: Omit<Complaint, 'id'>) => void;
@@ -67,23 +82,52 @@ interface MobileSimulatorProps {
   wingsList: string[];
   postalAddress: string;
   buildingType: string;
-  onUpdateSocietySettings: (name: string, wingsEnabled: boolean, wings: string[], postalAddress: string, buildingType: string) => void;
+  onUpdateSocietySettings: (
+    name: string, 
+    wingsEnabled: boolean, 
+    wings: string[], 
+    postalAddress: string, 
+    buildingType: string,
+    structureType?: 'standalone' | 'wings' | 'towers_wings',
+    towers?: any[]
+  ) => void;
   onSaveOrUpdateMember: (member: Member) => void;
-  onAddNotice?: (notice: { title: string; category: string; content: string }) => void;
+  onAddNotice?: (notice: { 
+    title: string; 
+    category: string; 
+    content: string; 
+    attachmentUrl?: string; 
+    attachmentName?: string; 
+    attachmentSize?: string;
+  }) => void;
+  onAddInvoice?: (invoice: Omit<Invoice, 'id'>) => void;
+  onAddVisitor?: (visitor: Omit<Visitor, 'id'>) => void;
+  onUpdateVisitor?: (id: string, status: Visitor['Status'], hostApprovedBy?: string) => void;
+  onAddComplaintReply?: (reply: Omit<ComplaintReply, 'id'>) => void;
   lastSynced?: string;
   societies?: Society[];
   activeSocietyId?: string;
   onChangeActiveSociety?: (id: string) => void;
   onCreateSociety?: (name: string, type: string, address: string, wings: string[], wingsEnabled: boolean) => void;
+  onAddDues?: (flatNo: string, amount: number, desc: string) => void;
+  onAddAuditLog?: (action: string, details: string) => void;
 }
 
 export default function MobileSimulator({
   members: rawMembers,
+  allMembers: rawAllMembers = [],
   payments: rawPayments,
   expenses: rawExpenses,
   complaints: rawComplaints,
   notices: rawNotices,
+  invoices: rawInvoices = [],
+  visitors: rawVisitors = [],
+  complaintReplies: rawComplaintReplies = [],
   auditLogs = [],
+  roles: rawRoles = [],
+  userAuths: rawUserAuths = [],
+  onUpdateRoles,
+  onUpdateUserAuths,
   onAddPayment,
   onAddExpense,
   onAddComplaint,
@@ -98,17 +142,29 @@ export default function MobileSimulator({
   onUpdateSocietySettings,
   onSaveOrUpdateMember,
   onAddNotice,
+  onAddInvoice,
+  onAddVisitor,
+  onUpdateVisitor,
+  onAddComplaintReply,
   lastSynced,
   societies = [],
   activeSocietyId = 'greenwood',
   onChangeActiveSociety,
-  onCreateSociety
+  onCreateSociety,
+  onAddDues,
+  onAddAuditLog
 }: MobileSimulatorProps) {
   const members = Array.isArray(rawMembers) ? rawMembers : [];
+  const allMembers = Array.isArray(rawAllMembers) ? rawAllMembers : [];
   const payments = Array.isArray(rawPayments) ? rawPayments : [];
   const expenses = Array.isArray(rawExpenses) ? rawExpenses : [];
   const complaints = Array.isArray(rawComplaints) ? rawComplaints : [];
   const notices = Array.isArray(rawNotices) ? rawNotices : [];
+  const invoices = Array.isArray(rawInvoices) ? rawInvoices : [];
+  const visitors = Array.isArray(rawVisitors) ? rawVisitors : [];
+  const roles = Array.isArray(rawRoles) ? rawRoles : [];
+  const userAuths = Array.isArray(rawUserAuths) ? rawUserAuths : [];
+  const complaintReplies = Array.isArray(rawComplaintReplies) ? rawComplaintReplies : [];
   
   // Login & RBAC State
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -121,12 +177,23 @@ export default function MobileSimulator({
     return localStorage.getItem('society_sim_member_flat') || '';
   });
 
-  // Housing Society Connection State (to prevent leakage of other societies)
-  const [isSocietyConnected, setIsSocietyConnected] = useState<boolean>(() => {
-    return localStorage.getItem('society_sim_is_connected') === 'true';
-  });
-  const [societyCodeInput, setSocietyCodeInput] = useState('');
-  const [connectionError, setConnectionError] = useState('');
+  const activeResidentMember = members.find(m => m.FlatNo === loggedInMemberFlat) || {
+    FlatNo: loggedInMemberFlat,
+    OwnerName: 'Resident',
+    Balance: 0,
+    Status: 'Owner' as const
+  };
+
+  // Automatically clear credential textboxes when logged out
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setLoginEmailOrPhone('');
+      setLoginPasscode('');
+      setPassword('');
+    }
+  }, [isLoggedIn]);
+
+
 
   const [loginRole, setLoginRole] = useState<'Admin' | 'Member'>('Admin');
   const [selectedMemberFlat, setSelectedMemberFlat] = useState<string>('');
@@ -151,6 +218,10 @@ export default function MobileSimulator({
     setSelectedMemberFlat('');
   }, [activeSocietyId]);
 
+  const activeSocietyObj = societies?.find(s => s.id === activeSocietyId);
+  const activeStructureType = activeSocietyObj?.StructureType || (hasWings ? 'wings' : 'standalone');
+  const activeTowers = activeSocietyObj?.Towers || [];
+
   const handleZoomChange = (scale: number) => {
     setZoomScale(scale);
     localStorage.setItem('society_sim_zoom', String(scale));
@@ -159,8 +230,56 @@ export default function MobileSimulator({
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  // Credentials-based login states
+  const [loginEmailOrPhone, setLoginEmailOrPhone] = useState(() => {
+    return localStorage.getItem('society_sim_logged_email_or_phone') || '';
+  });
+  const [loginPasscode, setLoginPasscode] = useState('');
+  const [matchedProperties, setMatchedProperties] = useState<Member[]>([]);
+  const [showPropertySelector, setShowPropertySelector] = useState(false);
+  const [loggedInUserEmail, setLoggedInUserEmail] = useState(() => {
+    return localStorage.getItem('society_sim_logged_email') || '';
+  });
+  const [loggedInUserContact, setLoggedInUserContact] = useState(() => {
+    return localStorage.getItem('society_sim_logged_contact') || '';
+  });
+
+  // OTP-Based Verification & Multi-Factor Simulation States
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [showOtpOverlay, setShowOtpOverlay] = useState(false);
+  const [activeOtpCode, setActiveOtpCode] = useState('');
+  const [userOtpInput, setUserOtpInput] = useState('');
+  const [pendingAuthMatches, setPendingAuthMatches] = useState<Member[]>([]);
+  const [smsBanner, setSmsBanner] = useState<string | null>(null);
+  const [mfaLogs, setMfaLogs] = useState<any[]>([]);
+
+  // Custom persistent passcodes & Password Reset States
+  const [customPasscodes, setCustomPasscodes] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('society_sim_custom_passcodes');
+    return saved ? JSON.parse(saved) : {};
+  });
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotRole, setForgotRole] = useState<'Admin' | 'Member'>('Member');
+  const [forgotEmailOrPhone, setForgotEmailOrPhone] = useState('');
+  const [forgotOtpSent, setForgotOtpSent] = useState(false);
+  const [forgotOtpCode, setForgotOtpCode] = useState('');
+  const [forgotOtpInput, setForgotOtpInput] = useState('');
+  const [newPasscode, setNewPasscode] = useState('');
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotError, setForgotError] = useState('');
+
+  // SMS Banner auto-hide
+  useEffect(() => {
+    if (smsBanner) {
+      const timer = setTimeout(() => {
+        setSmsBanner(null);
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [smsBanner]);
+
   // Tab State
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'members' | 'payments' | 'expenses' | 'complaints' | 'notices'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'members' | 'payments' | 'expenses' | 'complaints' | 'notices' | 'amenities'>('dashboard');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -176,6 +295,22 @@ export default function MobileSimulator({
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [showComplaintForm, setShowComplaintForm] = useState(false);
 
+  // Visitor Simulator States
+  const [showAddVisitorModal, setShowAddVisitorModal] = useState(false);
+  const [newVisName, setNewVisName] = useState('');
+  const [newVisPurpose, setNewVisPurpose] = useState('Delivery');
+  const [newVisContact, setNewVisContact] = useState('');
+  const [newVisVehicle, setNewVisVehicle] = useState('');
+  const [newVisFlatNo, setNewVisFlatNo] = useState('');
+
+  // Automated Billing Engine States
+  const [billingMonth, setBillingMonth] = useState('July 2026');
+  const [billBase, setBillBase] = useState('2000');
+  const [billWater, setBillWater] = useState('300');
+  const [billSecurity, setBillSecurity] = useState('200');
+  const [billParking, setBillParking] = useState('100');
+  const [showBillingEngine, setShowBillingEngine] = useState(false);
+
   // Automated Notice states when resolving complaint
   const [autoNoticeEnabled, setAutoNoticeEnabled] = useState(false);
   const [autoNoticeType, setAutoNoticeType] = useState<'society' | 'member'>('society');
@@ -187,6 +322,13 @@ export default function MobileSimulator({
   const [newNoticeTitle, setNewNoticeTitle] = useState('');
   const [newNoticeCategory, setNewNoticeCategory] = useState<'General' | 'Maintenance' | 'Meeting' | 'Event' | 'Security'>('General');
   const [newNoticeContent, setNewNoticeContent] = useState('');
+  const [newNoticeFileUrl, setNewNoticeFileUrl] = useState('');
+  const [newNoticeFileName, setNewNoticeFileName] = useState('');
+  const [newNoticeFileSize, setNewNoticeFileSize] = useState('');
+
+  // Circular Preview Modal States
+  const [previewingNotice, setPreviewingNotice] = useState<Notice | null>(null);
+  const [viewerZoom, setViewerZoom] = useState(100);
 
   // Custom states for Audit log view and Member dues UPI pay modal
   const [showAuditLogsModal, setShowAuditLogsModal] = useState(false);
@@ -221,20 +363,23 @@ export default function MobileSimulator({
 
   // Society settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [tempSocietyName, setTempSocietyName] = useState(societyName);
-  const [tempHasWings, setTempHasWings] = useState(hasWings);
-  const [tempWingsList, setTempWingsList] = useState(wingsList.join(', '));
-  const [tempPostalAddress, setTempPostalAddress] = useState(postalAddress);
-  const [tempBuildingType, setTempBuildingType] = useState(buildingType);
+  const [tempSocietyName, setTempSocietyName] = useState(societyName || '');
+  const [tempHasWings, setTempHasWings] = useState(hasWings || false);
+  const [tempWingsList, setTempWingsList] = useState((wingsList || []).join(', '));
+  const [tempPostalAddress, setTempPostalAddress] = useState(postalAddress || '');
+  const [tempBuildingType, setTempBuildingType] = useState(buildingType || 'Housing Society');
+  const [tempStructureType, setTempStructureType] = useState<'standalone' | 'wings' | 'towers_wings'>('standalone');
+  const [tempTowers, setTempTowers] = useState<any[]>([]);
 
   // Sync temp values when societyName/hasWings/wingsList changes from outside
+  const wingsListStr = (wingsList || []).join(',');
   useEffect(() => {
-    setTempSocietyName(societyName);
-    setTempHasWings(hasWings);
-    setTempWingsList(wingsList.join(', '));
-    setTempPostalAddress(postalAddress);
-    setTempBuildingType(buildingType);
-  }, [societyName, hasWings, wingsList, postalAddress, buildingType]);
+    setTempSocietyName(societyName || '');
+    setTempHasWings(hasWings || false);
+    setTempWingsList((wingsList || []).join(', '));
+    setTempPostalAddress(postalAddress || '');
+    setTempBuildingType(buildingType || 'Housing Society');
+  }, [societyName, hasWings, wingsListStr, postalAddress, buildingType]);
 
   // Member form state
   const [showMemberForm, setShowMemberForm] = useState(false);
@@ -248,6 +393,7 @@ export default function MobileSimulator({
   const [memCoOwners, setMemCoOwners] = useState('');
   const [memVehicleNo, setMemVehicleNo] = useState('');
   const [memWing, setMemWing] = useState('');
+  const [memTower, setMemTower] = useState('');
   const [selectedWingFilter, setSelectedWingFilter] = useState('All');
 
   // Sync / Loader status
@@ -259,81 +405,286 @@ export default function MobileSimulator({
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleConnectSociety = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanCode = societyCodeInput.trim().toLowerCase();
-    if (!cleanCode) {
-      setConnectionError('Please enter an access code');
-      return;
-    }
+  const [replyText, setReplyText] = useState('');
 
-    // Find society by id or alias
-    let matched = societies.find(s => s.id.toLowerCase() === cleanCode);
-    if (!matched) {
-      // Check aliases for standard societies
-      if (cleanCode === 'gw100' || cleanCode === 'greenwood') {
-        matched = societies.find(s => s.id === 'greenwood');
-      } else if (cleanCode === 'rh200' || cleanCode === 'royal_heights') {
-        matched = societies.find(s => s.id === 'royal_heights');
-      } else if (cleanCode === 'sb300' || cleanCode === 'sea_breeze') {
-        matched = societies.find(s => s.id === 'sea_breeze');
-      }
-    }
+  const handleSendReply = () => {
+    if (!replyText.trim() || !activeComplaintDetail) return;
 
-    if (matched) {
-      onChangeActiveSociety && onChangeActiveSociety(matched.id);
-      setIsSocietyConnected(true);
-      localStorage.setItem('society_sim_is_connected', 'true');
-      localStorage.setItem('active_society_id', matched.id);
-      setConnectionError('');
-      setSocietyCodeInput('');
-      setSelectedMemberFlat('');
-      setPassword('');
-      setPasswordError('');
-      triggerToast(`Connected to ${matched.Name}`);
+    let senderName = 'Resident Member';
+    let senderRole: 'Admin' | 'Member' = 'Member';
+
+    if (userRole === 'Admin') {
+      senderName = 'Committee Admin (Secretary)';
+      senderRole = 'Admin';
     } else {
-      setConnectionError('Invalid Access Code. Please check and try again.');
+      const activeMember = members.find(m => m.FlatNo === loggedInMemberFlat);
+      senderName = activeMember ? `${activeMember.OwnerName} (Flat ${activeMember.FlatNo})` : `Flat ${loggedInMemberFlat}`;
+      senderRole = 'Member';
     }
+
+    if (onAddComplaintReply) {
+      onAddComplaintReply({
+        ComplaintId: activeComplaintDetail.id,
+        SocietyId: activeSocietyId,
+        SenderName: senderName,
+        SenderRole: senderRole,
+        Message: replyText.trim(),
+        Timestamp: new Date().toISOString()
+      });
+      setReplyText('');
+      triggerToast('Response posted successfully!');
+    }
+  };
+
+
+
+  const normalizePhone = (val: string) => {
+    const digitsOnly = val.replace(/\D/g, '');
+    return digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly;
+  };
+
+  const isEmail = (val: string) => {
+    return val.includes('@');
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    setPasswordError('');
+
     if (loginRole === 'Admin') {
-      if (password === 'admin123') {
+      const adminEmailInput = loginEmailOrPhone.trim().toLowerCase();
+      if (!adminEmailInput) {
+        setPasswordError('Please enter Admin Email');
+        return;
+      }
+      if (!password) {
+        setPasswordError('Please enter Security Gate Code');
+        return;
+      }
+
+      const customAdminPass = customPasscodes[adminEmailInput];
+      const validPass = customAdminPass || 'admin123';
+
+      if (password === validPass) {
+        const adminMember = allMembers.find(m => 
+          m.Email && m.Email.trim().toLowerCase() === adminEmailInput && m.Role === 'Admin'
+        );
+
+        let targetSocietyId = (adminMember && adminMember.SocietyId) ? adminMember.SocietyId : null;
+
+        // Fallback: Intelligent parsing for admin emails if no explicit database entry exists
+        if (!targetSocietyId) {
+          if (adminEmailInput.includes('greenwood') || adminEmailInput.includes('greewood')) {
+            targetSocietyId = 'greenwood';
+          } else if (adminEmailInput.includes('royalheights') || adminEmailInput.includes('royal_heights') || adminEmailInput.includes('royal')) {
+            targetSocietyId = 'royal_heights';
+          } else if (adminEmailInput.includes('seabreeze') || adminEmailInput.includes('sea_breeze') || adminEmailInput.includes('breeze')) {
+            targetSocietyId = 'sea_breeze';
+          }
+        }
+
         setIsLoggedIn(true);
         setUserRole('Admin');
         setLoggedInMemberFlat('');
         localStorage.setItem('society_sim_logged', 'true');
         localStorage.setItem('society_sim_role', 'Admin');
         localStorage.setItem('society_sim_member_flat', '');
+        localStorage.setItem('society_sim_logged_email_or_phone', adminEmailInput);
+        
+        if (targetSocietyId && onChangeActiveSociety) {
+          onChangeActiveSociety(targetSocietyId);
+          localStorage.setItem('active_society_id', targetSocietyId);
+          triggerToast(`Authorized as Admin for ${societies.find(s => s.id === targetSocietyId)?.Name || 'Society'}`);
+        } else {
+          triggerToast('Authorized as Committee Admin');
+        }
         setPasswordError('');
-        triggerToast('Logged in as Admin');
       } else {
-        setPasswordError('Invalid Gate Code. Try: admin123');
+        setPasswordError(`Invalid Security Code. Please check or use "Forgot Code" if you reset it.`);
       }
     } else {
-      if (!selectedMemberFlat) {
-        setPasswordError('Please select your flat');
+      const inputVal = loginEmailOrPhone.trim().toLowerCase();
+      const inputPass = loginPasscode.trim();
+      
+      if (!inputVal) {
+        setPasswordError('Please enter your registered Email or Contact Number');
         return;
       }
-      setIsLoggedIn(true);
-      setUserRole('Member');
-      setLoggedInMemberFlat(selectedMemberFlat);
-      localStorage.setItem('society_sim_logged', 'true');
-      localStorage.setItem('society_sim_role', 'Member');
-      localStorage.setItem('society_sim_member_flat', selectedMemberFlat);
-      setPasswordError('');
-      triggerToast(`Logged in as Unit ${selectedMemberFlat}`);
+      if (!inputPass) {
+        setPasswordError('Please enter your password / registered Contact Number');
+        return;
+      }
+
+      const matches = allMembers.filter(m => {
+        const inputLower = inputVal.trim().toLowerCase();
+        if (isEmail(inputVal)) {
+          return m.Email && m.Email.trim().toLowerCase() === inputLower;
+        } else if (m.OwnerName && m.OwnerName.toLowerCase().includes(inputLower)) {
+          return true;
+        } else {
+          const mPhoneClean = m.ContactNo ? normalizePhone(m.ContactNo) : '';
+          const inputPhoneClean = normalizePhone(inputVal);
+          return mPhoneClean && inputPhoneClean && mPhoneClean === inputPhoneClean;
+        }
+      });
+
+      if (matches.length === 0) {
+        setPasswordError('Credentials not registered. Please contact your society committee.');
+        return;
+      }
+
+      const verifiedMatches = matches.filter(m => {
+        const key = m.Email ? m.Email.trim().toLowerCase() : (m.ContactNo ? normalizePhone(m.ContactNo) : '');
+        const customPass = key ? customPasscodes[key] : null;
+        if (customPass && inputPass === customPass) {
+          return true;
+        }
+        if (inputPass === '1234' || inputPass === 'member123') {
+          return true;
+        }
+        const mPhoneClean = m.ContactNo ? normalizePhone(m.ContactNo) : '';
+        const passPhoneClean = normalizePhone(inputPass);
+        return mPhoneClean && passPhoneClean && mPhoneClean === passPhoneClean;
+      });
+
+      if (verifiedMatches.length === 0) {
+        setPasswordError('Incorrect passcode. Enter your custom passcode or registered Contact Number.');
+        return;
+      }
+
+      setLoggedInUserEmail(verifiedMatches[0].Email || '');
+      setLoggedInUserContact(verifiedMatches[0].ContactNo || '');
+      localStorage.setItem('society_sim_logged_email', verifiedMatches[0].Email || '');
+      localStorage.setItem('society_sim_logged_contact', verifiedMatches[0].ContactNo || '');
+      localStorage.setItem('society_sim_logged_email_or_phone', inputVal);
+
+      if (mfaEnabled) {
+        const code = String(Math.floor(1000 + Math.random() * 9000));
+        setActiveOtpCode(code);
+        setPendingAuthMatches(verifiedMatches);
+        setUserOtpInput('');
+        setShowOtpOverlay(true);
+        setSmsBanner(`💬 GreenSecurID: Your login OTP is [ ${code} ]. Valid for 5 mins.`);
+        
+        const newLog = {
+          id: `MFA-${Date.now()}`,
+          timestamp: new Date().toLocaleTimeString(),
+          action: 'MFA Initiated',
+          details: `Simulated OTP generated and sent to SMS container. Code: ${code}`,
+          status: 'Pending'
+        };
+        setMfaLogs(prev => [newLog, ...prev]);
+        triggerToast('Simulated OTP Sent!');
+        return;
+      }
+
+      if (verifiedMatches.length === 1) {
+        const singleUser = verifiedMatches[0];
+        setIsLoggedIn(true);
+        setUserRole('Member');
+        setLoggedInMemberFlat(singleUser.FlatNo);
+        localStorage.setItem('society_sim_logged', 'true');
+        localStorage.setItem('society_sim_role', 'Member');
+        localStorage.setItem('society_sim_member_flat', singleUser.FlatNo);
+        
+        if (singleUser.SocietyId && onChangeActiveSociety) {
+          onChangeActiveSociety(singleUser.SocietyId);
+          localStorage.setItem('active_society_id', singleUser.SocietyId);
+        }
+        
+        setPasswordError('');
+        triggerToast(`Signed in to Flat ${singleUser.FlatNo}`);
+      } else {
+        setMatchedProperties(verifiedMatches);
+        setShowPropertySelector(true);
+        setPasswordError('');
+      }
     }
+  };
+
+  const handleVerifyOtp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (userOtpInput.trim() === activeOtpCode) {
+      const newLog = {
+        id: `MFA-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        action: 'MFA Verified',
+        details: 'Correct OTP entered. Granted secure session access.',
+        status: 'Success'
+      };
+      setMfaLogs(prev => [newLog, ...prev]);
+      
+      setShowOtpOverlay(false);
+      setUserOtpInput('');
+      
+      if (pendingAuthMatches.length === 1) {
+        const singleUser = pendingAuthMatches[0];
+        setIsLoggedIn(true);
+        setUserRole('Member');
+        setLoggedInMemberFlat(singleUser.FlatNo);
+        localStorage.setItem('society_sim_logged', 'true');
+        localStorage.setItem('society_sim_role', 'Member');
+        localStorage.setItem('society_sim_member_flat', singleUser.FlatNo);
+        
+        if (singleUser.SocietyId && onChangeActiveSociety) {
+          onChangeActiveSociety(singleUser.SocietyId);
+          localStorage.setItem('active_society_id', singleUser.SocietyId);
+        }
+        
+        setPasswordError('');
+        triggerToast(`Signed in securely to Flat ${singleUser.FlatNo}`);
+      } else if (pendingAuthMatches.length > 1) {
+        setMatchedProperties(pendingAuthMatches);
+        setShowPropertySelector(true);
+        setPasswordError('');
+      }
+    } else {
+      const newLog = {
+        id: `MFA-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString(),
+        action: 'MFA Failure',
+        details: `Incorrect OTP entered: "${userOtpInput}". Expected: ${activeOtpCode}`,
+        status: 'Blocked'
+      };
+      setMfaLogs(prev => [newLog, ...prev]);
+      triggerToast('Invalid OTP! Access Denied.');
+    }
+  };
+
+  const handleSelectProperty = (property: Member) => {
+    setIsLoggedIn(true);
+    setUserRole('Member');
+    setLoggedInMemberFlat(property.FlatNo);
+    localStorage.setItem('society_sim_logged', 'true');
+    localStorage.setItem('society_sim_role', 'Member');
+    localStorage.setItem('society_sim_member_flat', property.FlatNo);
+    
+    if (property.SocietyId && onChangeActiveSociety) {
+      onChangeActiveSociety(property.SocietyId);
+      localStorage.setItem('active_society_id', property.SocietyId);
+    }
+    
+    setShowPropertySelector(false);
+    triggerToast(`Entered Flat ${property.FlatNo} at ${societies.find(s => s.id === property.SocietyId)?.Name || 'Society'}`);
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserRole('Admin');
     setLoggedInMemberFlat('');
+    setLoggedInUserEmail('');
+    setLoggedInUserContact('');
+    setMatchedProperties([]);
+    setShowPropertySelector(false);
+    setLoginEmailOrPhone('');
+    setLoginPasscode('');
+    setPassword('');
     localStorage.removeItem('society_sim_logged');
     localStorage.removeItem('society_sim_role');
     localStorage.removeItem('society_sim_member_flat');
+    localStorage.removeItem('society_sim_logged_email');
+    localStorage.removeItem('society_sim_logged_contact');
+    localStorage.removeItem('society_sim_logged_email_or_phone');
     setSearchQuery('');
     triggerToast('Logged out of system');
   };
@@ -349,7 +700,7 @@ export default function MobileSimulator({
   const handleSaveSocietySettings = (e: React.FormEvent) => {
     e.preventDefault();
     const wings = tempWingsList.split(',').map(w => w.trim()).filter(w => w !== '');
-    onUpdateSocietySettings(tempSocietyName, tempHasWings, wings, tempPostalAddress, tempBuildingType);
+    onUpdateSocietySettings(tempSocietyName, tempHasWings, wings, tempPostalAddress, tempBuildingType, tempStructureType, tempTowers);
     setShowSettingsModal(false);
     triggerToast('Society settings updated!');
   };
@@ -366,6 +717,7 @@ export default function MobileSimulator({
     setMemCoOwners('');
     setMemVehicleNo('');
     setMemWing(wingsList[0] || '');
+    setMemTower(activeTowers[0]?.Name || '');
     setShowMemberForm(true);
   };
 
@@ -380,6 +732,7 @@ export default function MobileSimulator({
     setMemCoOwners(member.CoOwners || '');
     setMemVehicleNo(member.VehicleNo || '');
     setMemWing(member.Wing || wingsList[0] || '');
+    setMemTower(member.Tower || activeTowers[0]?.Name || '');
     setShowMemberForm(true);
   };
 
@@ -399,7 +752,8 @@ export default function MobileSimulator({
       Status: memStatus,
       CoOwners: memCoOwners.trim(),
       VehicleNo: memVehicleNo.trim(),
-      Wing: hasWings ? memWing : ''
+      Wing: activeStructureType === 'standalone' ? '' : memWing,
+      Tower: activeStructureType === 'towers_wings' ? memTower : undefined
     };
 
     onSaveOrUpdateMember(member);
@@ -727,6 +1081,22 @@ export default function MobileSimulator({
                 </div>
               )}
 
+          {/* Simulated SMS Push Banner */}
+          {smsBanner && (
+            <div className="absolute top-10 left-3 right-3 bg-slate-900/95 text-slate-100 rounded-2xl p-3 text-xs shadow-2xl z-50 border border-purple-500/50 flex flex-col gap-1">
+              <div className="flex justify-between items-center border-b border-white/10 pb-1.5 mb-1">
+                <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest flex items-center gap-1">
+                  💬 MESSAGES • NOW
+                </span>
+                <span className="text-[8px] text-slate-400">GreenSecurID SMS Gateway</span>
+              </div>
+              <p className="text-[11px] font-bold leading-relaxed text-white">{smsBanner}</p>
+              <div className="text-[8px] text-purple-300 font-mono mt-1 text-right italic">
+                Click code or copy to verify below
+              </div>
+            </div>
+          )}
+
           {/* Toast Notification */}
           {toastMessage && (
             <div className="absolute top-14 left-4 right-4 bg-purple-600 text-white rounded-xl py-2 px-3 text-xs font-semibold text-center shadow-lg z-50 flex items-center justify-center gap-1.5 border border-purple-500 animate-bounce">
@@ -743,64 +1113,379 @@ export default function MobileSimulator({
               {/* Wallpaper element */}
               <div className="absolute inset-0 bg-gradient-to-b from-purple-800/80 via-purple-900 to-slate-950 z-0"></div>
 
-              {!isSocietyConnected ? (
-                /* --- STEP 1: VERIFY SOCIETY ACCESS CODE --- */
-                <div className="z-10 flex-1 flex flex-col justify-center space-y-6">
-                  <div className="text-center">
-                    <div className="w-14 h-14 bg-purple-500/20 rounded-full border border-purple-400/20 flex items-center justify-center mx-auto mb-3">
-                      <Building2 className="w-7 h-7 text-purple-300 animate-pulse" />
-                    </div>
-                    <h1 className="text-xl font-extrabold tracking-tight">Society Connect</h1>
-                    <p className="text-[10px] text-purple-300 mt-0.5 font-medium">Smart Resident & Committee Portal</p>
+              <div className="z-10 flex-1 flex flex-col justify-between space-y-6">
+                <div className="text-center pt-2">
+                  <div className="w-14 h-14 bg-purple-500/20 rounded-full border border-purple-400/20 flex items-center justify-center mx-auto mb-3">
+                    <Building2 className="w-7 h-7 text-purple-300 animate-pulse" />
                   </div>
+                  <h1 className="text-xl font-extrabold tracking-tight">Society Connect</h1>
+                  <p className="text-[10px] text-purple-300 mt-0.5 font-medium">Smart Resident & Committee Portal</p>
+                </div>
 
-                  <form onSubmit={handleConnectSociety} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[9px] uppercase tracking-wider font-extrabold text-purple-300 block">Housing Society Access Code</label>
-                      <input
-                        type="text"
-                        placeholder="Enter Society Access Code"
-                        value={societyCodeInput}
-                        onChange={(e) => {
-                          setSocietyCodeInput(e.target.value);
-                          setConnectionError('');
-                        }}
-                        className="w-full bg-slate-950/50 border border-purple-400/30 text-white placeholder-purple-300/30 px-3 py-3 rounded-xl text-center text-xs tracking-wider focus:ring-1 focus:ring-purple-400 focus:outline-none font-bold"
-                      />
+                {showOtpOverlay ? (
+                  /* --- STEP 3: OTP SMS VERIFICATION --- */
+                  <div className="space-y-4 animate-fadeIn my-auto text-center z-10">
+                    <div>
+                      <h2 className="text-sm font-extrabold text-purple-200 flex items-center justify-center gap-1.5">
+                        <span>🛡️ SMS OTP Verification</span>
+                        <span className="text-[7.5px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-black border border-purple-400/10">MFA Sim</span>
+                      </h2>
+                      <p className="text-[10px] text-purple-300 mt-1 leading-relaxed">
+                        A secure 4-digit verification code has been dispatched to your mobile. Enter it below to authorize this session:
+                      </p>
                     </div>
 
-                    {connectionError && (
-                      <p className="text-rose-400 text-[10px] font-bold text-center bg-rose-500/10 border border-rose-500/20 rounded-lg p-2">{connectionError}</p>
+                    <form onSubmit={handleVerifyOtp} className="space-y-3">
+                      <div className="relative max-w-[150px] mx-auto">
+                        <input
+                          type="text"
+                          maxLength={4}
+                          placeholder="••••"
+                          value={userOtpInput}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setUserOtpInput(val);
+                          }}
+                          className="w-full text-center bg-white text-slate-900 border-2 border-purple-400 placeholder-slate-300 py-2.5 rounded-2xl text-xl font-black tracking-[0.5em] focus:ring-4 focus:ring-purple-500/30 focus:outline-none transition-all"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowOtpOverlay(false);
+                            setUserOtpInput('');
+                            setLoginEmailOrPhone('');
+                            setLoginPasscode('');
+                            setPassword('');
+                            triggerToast('Login Cancelled');
+                          }}
+                          className="flex-1 py-2 bg-slate-950/40 hover:bg-slate-950/60 border border-purple-400/20 text-purple-200 rounded-xl text-xs font-bold transition-all"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                        >
+                          Verify Code
+                        </button>
+                      </div>
+                    </form>
+
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newCode = String(Math.floor(1000 + Math.random() * 9000));
+                          setActiveOtpCode(newCode);
+                          setUserOtpInput('');
+                          setSmsBanner(`💬 GreenSecurID: Your new login OTP is [ ${newCode} ]. Valid for 5 mins.`);
+                          
+                          const newLog = {
+                            id: `MFA-${Date.now()}`,
+                            timestamp: new Date().toLocaleTimeString(),
+                            action: 'MFA Resent',
+                            details: `Simulated OTP regenerated. New Code: ${newCode}`,
+                            status: 'Pending'
+                          };
+                          setMfaLogs(prev => [newLog, ...prev]);
+                          triggerToast('New OTP Dispatched!');
+                        }}
+                        className="text-[10px] text-purple-300 hover:text-white underline font-bold"
+                      >
+                        🔄 Resend OTP Code
+                      </button>
+                    </div>
+
+                    {/* Security Terminal Widget */}
+                    <div className="bg-slate-950/90 p-2.5 rounded-xl border border-purple-500/20 text-left space-y-1.5 font-mono text-[8px] max-h-[140px] overflow-y-auto mt-4">
+                      <p className="text-purple-400 font-extrabold uppercase border-b border-purple-500/10 pb-1 flex justify-between">
+                        <span>🛡️ SECURITY TERMINAL LOGS</span>
+                        <span className="text-[7px] text-emerald-400 animate-pulse">● SECURE GATEWAY</span>
+                      </p>
+                      {mfaLogs.length > 0 ? (
+                        mfaLogs.map((log) => (
+                          <div key={log.id} className="border-b border-white/5 pb-1">
+                            <div className="flex justify-between font-bold">
+                              <span className="text-purple-300">[{log.timestamp}] {log.action}</span>
+                              <span className={log.status === 'Success' ? 'text-emerald-400' : (log.status === 'Blocked' ? 'text-rose-400' : 'text-amber-400')}>{log.status}</span>
+                            </div>
+                            <p className="text-slate-400 text-[7.5px] mt-0.5 leading-tight">{log.details}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-slate-500">No security events logged yet.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : showPropertySelector ? (
+                  /* --- STEP 2: SELECT MULTIPLE PROPERTY/FLAT --- */
+                  <div className="space-y-4 animate-fadeIn my-auto">
+                    <div className="text-center">
+                      <h2 className="text-sm font-bold text-purple-200">Multiple Properties Found</h2>
+                      <p className="text-[10px] text-purple-300 mt-1">We found more than one active unit registered to your account. Select which portal to enter:</p>
+                    </div>
+
+                    <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+                      {matchedProperties.map((prop, idx) => {
+                        const soc = societies.find(s => s.id === prop.SocietyId);
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectProperty(prop)}
+                            className="w-full bg-slate-950/50 border border-purple-400/20 hover:border-purple-400/60 p-3 rounded-xl flex flex-col gap-1.5 text-left transition-all active:scale-[0.98] cursor-pointer"
+                          >
+                            <div className="flex justify-between items-center w-full">
+                              <span className="text-xs font-black text-white truncate max-w-[180px]">
+                                {soc ? soc.Name : prop.SocietyId}
+                              </span>
+                              <span className="text-[9px] font-black uppercase bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-400/10">
+                                {prop.Status}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1 text-[10px] text-purple-200 font-bold">
+                              <span className="bg-purple-900/50 px-1.5 py-0.5 rounded text-white">Flat {prop.FlatNo}</span>
+                              {prop.Wing && <span className="bg-slate-900/60 px-1.5 py-0.5 rounded text-purple-300">{prop.Wing}</span>}
+                              <span className="text-[9px] text-purple-300 truncate max-w-[130px] ml-auto">
+                                {prop.OwnerName}
+                              </span>
+                            </div>
+
+                            {soc?.PostalAddress && (
+                              <div className="text-[9px] text-purple-300/60 flex items-center gap-1 truncate">
+                                <MapPin className="w-2.5 h-2.5 shrink-0" />
+                                <span className="truncate">{soc.PostalAddress}</span>
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPropertySelector(false);
+                        setMatchedProperties([]);
+                        setPasswordError('');
+                        setLoginEmailOrPhone('');
+                        setLoginPasscode('');
+                        setPassword('');
+                      }}
+                      className="w-full bg-purple-800/40 hover:bg-purple-800/60 border border-purple-400/20 text-purple-200 py-2.5 rounded-xl text-xs font-bold transition-all"
+                    >
+                      ← Back to Sign In
+                    </button>
+                  </div>
+                ) : showForgotPassword ? (
+                  /* --- FORGOT PASSWORD / ACCESS CODE RESET --- */
+                  <div className="space-y-4 my-auto pt-2 animate-fadeIn text-slate-200">
+                    <div className="flex items-center gap-2 text-purple-300 border-b border-purple-800/30 pb-2 mb-2">
+                      <Lock className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span className="text-xs font-black">Passcode Reset Engine</span>
+                    </div>
+
+                    {!forgotOtpSent ? (
+                      /* Step A: Request OTP */
+                      <div className="space-y-3">
+                        <p className="text-[10px] text-purple-200 leading-normal">
+                          Provide your registered Email or Contact Number. The Security Engine will generate a secure verification session.
+                        </p>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase tracking-wider font-extrabold text-purple-300 block">Select Account Role</label>
+                          <div className="grid grid-cols-2 p-1 bg-slate-950/40 border border-purple-400/20 rounded-xl">
+                            <button
+                              type="button"
+                              onClick={() => setForgotRole('Admin')}
+                              className={`py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                                forgotRole === 'Admin' ? 'bg-purple-600 text-white shadow-xs' : 'text-purple-300 hover:text-white'
+                              }`}
+                            >
+                              Committee Admin
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setForgotRole('Member')}
+                              className={`py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                                forgotRole === 'Member' ? 'bg-purple-600 text-white shadow-xs' : 'text-purple-300 hover:text-white'
+                              }`}
+                            >
+                              Resident Member
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300 block">Registered Email or Phone</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. admin@society.com or +91..."
+                            value={forgotEmailOrPhone}
+                            onChange={(e) => {
+                              setForgotEmailOrPhone(e.target.value);
+                              setForgotError('');
+                            }}
+                            className="w-full bg-white border border-purple-300 text-slate-900 placeholder-slate-400 px-3 py-2.5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          />
+                        </div>
+
+                        {forgotError && (
+                          <p className="text-rose-400 text-[10px] font-bold text-center bg-rose-500/10 border border-rose-500/20 rounded-lg p-2">
+                            {forgotError}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const inputVal = forgotEmailOrPhone.trim().toLowerCase();
+                            if (!inputVal) {
+                              setForgotError('Please enter your registered identifier.');
+                              return;
+                            }
+
+                            let found = false;
+                            if (forgotRole === 'Admin') {
+                              if (inputVal.includes('greenwood') || inputVal.includes('greewood') || inputVal.includes('seabreeze') || inputVal.includes('sea_breeze') || inputVal.includes('royal_heights') || allMembers.some(m => m.Email?.toLowerCase() === inputVal && m.Role === 'Admin')) {
+                                found = true;
+                              }
+                            } else {
+                              found = allMembers.some(m => {
+                                const emailMatch = m.Email && m.Email.toLowerCase() === inputVal;
+                                const mPhoneClean = m.ContactNo ? normalizePhone(m.ContactNo) : '';
+                                const inputPhoneClean = normalizePhone(inputVal);
+                                return emailMatch || (mPhoneClean && inputPhoneClean && mPhoneClean === inputPhoneClean);
+                              });
+                            }
+
+                            if (!found) {
+                              setForgotError('This identifier is not registered in our secure database.');
+                              return;
+                            }
+
+                            const code = String(Math.floor(1000 + Math.random() * 9000));
+                            setForgotOtpCode(code);
+                            setForgotOtpSent(true);
+                            setForgotOtpInput('');
+                            setNewPasscode('');
+                            setForgotError('');
+                            setSmsBanner(`💬 GreenSecurID: Reset OTP is [ ${code} ] for authorization reset. Valid for 10 mins.`);
+                            triggerToast('Security Reset OTP Sent!');
+                          }}
+                          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black py-2.5 rounded-xl text-xs shadow cursor-pointer text-center"
+                        >
+                          Send Verification OTP
+                        </button>
+                      </div>
+                    ) : !forgotSuccess ? (
+                      /* Step B: Verify OTP & Enter New Password */
+                      <div className="space-y-3">
+                        <p className="text-[10px] text-purple-200 leading-normal">
+                          An OTP has been dispatched. Confirm the code and set your new passcode.
+                        </p>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase tracking-wider font-extrabold text-purple-300 block">4-Digit Security OTP</label>
+                          <input
+                            type="text"
+                            maxLength={4}
+                            placeholder="e.g. 1234"
+                            value={forgotOtpInput}
+                            onChange={(e) => setForgotOtpInput(e.target.value.replace(/\D/g, ''))}
+                            className="w-full text-center bg-white border border-purple-300 text-slate-900 placeholder-slate-300 py-2 rounded-xl text-sm font-black tracking-widest focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[9px] uppercase tracking-wider font-extrabold text-purple-300 block">New Access Passcode</label>
+                          <input
+                            type="password"
+                            placeholder="Enter new passcode"
+                            value={newPasscode}
+                            onChange={(e) => setNewPasscode(e.target.value)}
+                            className="w-full bg-white border border-purple-300 text-slate-900 placeholder-slate-400 px-3 py-2.5 rounded-xl text-xs font-bold focus:outline-none"
+                          />
+                        </div>
+
+                        {forgotError && (
+                          <p className="text-rose-400 text-[10px] font-bold text-center bg-rose-500/10 border border-rose-500/20 rounded-lg p-2">
+                            {forgotError}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (forgotOtpInput !== forgotOtpCode) {
+                              setForgotError('Invalid Security Verification OTP.');
+                              return;
+                            }
+                            if (!newPasscode.trim()) {
+                              setForgotError('Please enter a valid non-empty new passcode.');
+                              return;
+                            }
+
+                            const targetKey = forgotEmailOrPhone.trim().toLowerCase();
+                            const updated = { ...customPasscodes, [targetKey]: newPasscode.trim() };
+                            setCustomPasscodes(updated);
+                            localStorage.setItem('society_sim_custom_passcodes', JSON.stringify(updated));
+
+                            setForgotSuccess(true);
+                            setForgotError('');
+                            triggerToast('Credentials updated successfully!');
+                            setTimeout(() => {
+                              setShowForgotPassword(false);
+                              setForgotOtpSent(false);
+                              setForgotSuccess(false);
+                              setLoginEmailOrPhone(forgotEmailOrPhone);
+                              if (forgotRole === 'Admin') {
+                                setPassword(newPasscode);
+                              } else {
+                                setLoginPasscode(newPasscode);
+                              }
+                            }, 2000);
+                          }}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 rounded-xl text-xs shadow cursor-pointer text-center"
+                        >
+                          Verify OTP & Reset Passcode
+                        </button>
+                      </div>
+                    ) : (
+                      /* Step C: Success Confirmation */
+                      <div className="text-center py-6 space-y-3 animate-fadeIn">
+                        <div className="w-12 h-12 bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-xl font-bold">
+                          ✓
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-black text-white">Reset Successful!</h4>
+                          <p className="text-[10px] text-slate-300 mt-1">
+                            Your secure passcode has been updated inside the sandbox.
+                          </p>
+                        </div>
+                      </div>
                     )}
 
                     <button
-                      type="submit"
-                      className="w-full bg-white hover:bg-slate-100 text-purple-900 font-extrabold py-3 px-4 rounded-xl text-xs transition-all shadow-md active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      type="button"
+                      onClick={() => {
+                        setShowForgotPassword(false);
+                        setForgotOtpSent(false);
+                        setForgotSuccess(false);
+                        setForgotError('');
+                      }}
+                      className="w-full text-center text-purple-300 hover:text-white text-[10px] font-bold underline cursor-pointer mt-1 block"
                     >
-                      <Building2 className="w-4 h-4" />
-                      <span>Find & Connect Society</span>
+                      ← Return to Sign In Screen
                     </button>
-                  </form>
-
-                  <div className="text-center text-[10px] text-purple-300/40">
-                    Your society committee must share their unique code to grant application access.
                   </div>
-                </div>
-              ) : (
-                /* --- STEP 2: LOG IN TO CONNECTED HOUSING SOCIETY --- */
-                <div className="z-10 flex-1 flex flex-col justify-between">
-                  <div className="text-center pt-4">
-                    <div className="w-14 h-14 bg-purple-500/20 rounded-full border border-purple-400/20 flex items-center justify-center mx-auto mb-3">
-                      <Lock className="w-7 h-7 text-purple-300 animate-pulse" />
-                    </div>
-                    <h1 className="text-xl font-extrabold tracking-tight truncate max-w-full" title={societyName}>🏢 {societyName}</h1>
-                    <p className="text-[9px] text-purple-300 mt-1 font-semibold flex items-center justify-center gap-1 bg-purple-950/40 px-2.5 py-0.5 rounded-full w-max mx-auto border border-purple-400/10">
-                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                      Connected Portal • {buildingType}
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleLogin} className="space-y-4 my-auto pt-4">
+                ) : (
+                  /* --- STEP 1: LOGIN FORM --- */
+                  <form onSubmit={handleLogin} className="space-y-4 my-auto pt-2">
                     {/* Role Switcher */}
                     <div className="grid grid-cols-2 p-1 bg-slate-950/40 border border-purple-400/20 rounded-xl">
                       <button
@@ -808,8 +1493,11 @@ export default function MobileSimulator({
                         onClick={() => {
                           setLoginRole('Admin');
                           setPasswordError('');
+                          setLoginEmailOrPhone('');
+                          setLoginPasscode('');
+                          setPassword('');
                         }}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                           loginRole === 'Admin'
                             ? 'bg-purple-600 text-white shadow-xs'
                             : 'text-purple-300 hover:text-white'
@@ -822,8 +1510,11 @@ export default function MobileSimulator({
                         onClick={() => {
                           setLoginRole('Member');
                           setPasswordError('');
+                          setLoginEmailOrPhone('');
+                          setLoginPasscode('');
+                          setPassword('');
                         }}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                           loginRole === 'Member'
                             ? 'bg-purple-600 text-white shadow-xs'
                             : 'text-purple-300 hover:text-white'
@@ -834,74 +1525,152 @@ export default function MobileSimulator({
                     </div>
 
                     {loginRole === 'Admin' ? (
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase tracking-wider font-bold text-purple-200">Admin Gate Code</label>
-                        <input
-                          type="password"
-                          placeholder="Enter Password (admin123)"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full bg-slate-950/40 border border-purple-400/30 text-white placeholder-purple-300/40 px-3 py-2.5 rounded-xl text-center text-xs tracking-wider focus:ring-1 focus:ring-purple-400 focus:outline-none"
-                        />
+                      /* Admin Form Fields */
+                      <div className="space-y-3 animate-fadeIn">
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300 block">Registered Admin Email</label>
+                          <div className="relative">
+                            <input
+                              type="email"
+                              placeholder="e.g. admin@greenwood.com"
+                              value={loginEmailOrPhone}
+                              onChange={(e) => {
+                                setLoginEmailOrPhone(e.target.value);
+                                setPasswordError('');
+                              }}
+                              className="w-full bg-white border border-purple-300 text-slate-900 placeholder-slate-400 pl-8 pr-3 py-2.5 rounded-xl text-xs font-bold focus:ring-2 focus:ring-purple-500 focus:outline-none transition-all"
+                            />
+                            <Mail className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-3" />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300 block">Admin Security Password</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForgotRole('Admin');
+                                setForgotEmailOrPhone(loginEmailOrPhone);
+                                setShowForgotPassword(true);
+                              }}
+                              className="text-[9px] font-bold text-purple-300 hover:text-white underline cursor-pointer"
+                            >
+                              Forgot Password?
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              placeholder="Enter your security password"
+                              value={password}
+                              onChange={(e) => {
+                                setPassword(e.target.value);
+                                setPasswordError('');
+                              }}
+                              className="w-full bg-white border border-purple-300 text-slate-900 placeholder-slate-400 pl-8 pr-3 py-2.5 rounded-xl text-xs text-center focus:ring-2 focus:ring-purple-500 focus:outline-none tracking-wider transition-all"
+                            />
+                            <Lock className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-3" />
+                          </div>
+                        </div>
                       </div>
                     ) : (
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase tracking-wider font-bold text-purple-200">Select Resident Unit / Flat</label>
-                        <select
-                          value={selectedMemberFlat}
-                          onChange={(e) => {
-                            setSelectedMemberFlat(e.target.value);
-                            setPasswordError('');
-                          }}
-                          className="w-full bg-slate-950/45 border border-purple-400/30 text-white px-3 py-2.5 rounded-xl text-center text-xs focus:ring-1 focus:ring-purple-400 focus:outline-none cursor-pointer font-bold"
-                        >
-                          <option value="" className="text-slate-800">-- Choose your Flat --</option>
-                          {members.map(m => (
-                            <option key={m.FlatNo} value={m.FlatNo} className="text-slate-800">
-                              Flat {m.FlatNo} ({m.OwnerName})
-                            </option>
-                          ))}
-                        </select>
+                      /* Resident Form Fields */
+                      <div className="space-y-3 animate-fadeIn">
+                        <div className="space-y-1">
+                          <label className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300 block">Registered Email or Contact No</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              placeholder="Email or +91 xxxxx xxxxx"
+                              value={loginEmailOrPhone}
+                              onChange={(e) => {
+                                setLoginEmailOrPhone(e.target.value);
+                                setPasswordError('');
+                              }}
+                              className="w-full bg-white border border-purple-300 text-slate-900 placeholder-slate-400 pl-8 pr-3 py-2.5 rounded-xl text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none font-bold transition-all"
+                            />
+                            <User className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-3" />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[10px] uppercase tracking-wider font-extrabold text-purple-300 block">Personal Login Passcode</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setForgotRole('Member');
+                                setForgotEmailOrPhone(loginEmailOrPhone);
+                                setShowForgotPassword(true);
+                              }}
+                              className="text-[9px] font-bold text-purple-300 hover:text-white underline cursor-pointer"
+                            >
+                              Forgot Passcode?
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              placeholder="Enter your registered contact number"
+                              value={loginPasscode}
+                              onChange={(e) => {
+                                setLoginPasscode(e.target.value);
+                                setPasswordError('');
+                              }}
+                              className="w-full bg-white border border-purple-300 text-slate-900 placeholder-slate-400 pl-8 pr-3 py-2.5 rounded-xl text-xs text-center focus:ring-2 focus:ring-purple-500 focus:outline-none transition-all"
+                            />
+                            <Lock className="w-3.5 h-3.5 text-purple-600 absolute left-2.5 top-3" />
+                          </div>
+                          <span className="text-[8px] text-purple-300/70 block leading-tight pt-1">
+                            🔐 <strong>Security Info:</strong> By default, enter your registered contact number or passcode to instantly login.
+                          </span>
+
+                          <div className="flex items-center justify-between p-2 rounded-xl bg-slate-900/40 border border-purple-400/25 mt-2.5">
+                            <div className="flex items-center gap-1.5 text-left">
+                              <ShieldCheck className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                              <div>
+                                <span className="text-[9px] font-black text-white block">Multi-Factor SMS OTP</span>
+                                <span className="text-[7.5px] text-purple-300 block">Simulate secure SMS passcode validation</span>
+                              </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer select-none">
+                              <input 
+                                type="checkbox" 
+                                checked={mfaEnabled} 
+                                onChange={(e) => setMfaEnabled(e.target.checked)} 
+                                className="sr-only peer" 
+                              />
+                              <div className="w-7 h-4 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[3px] after:bg-white after:rounded-full after:h-2.5 after:w-2.5 after:transition-all peer-checked:bg-purple-500"></div>
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     )}
 
                     {passwordError && (
-                      <p className="text-rose-400 text-[10px] font-medium text-center">{passwordError}</p>
+                      <p className="text-rose-400 text-[10px] font-bold text-center bg-rose-500/10 border border-rose-500/20 rounded-lg p-2 flex items-center justify-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{passwordError}</span>
+                      </p>
                     )}
 
                     <button
                       type="submit"
-                      className="w-full bg-white hover:bg-slate-100 text-purple-900 font-extrabold py-3 px-4 rounded-xl text-xs transition-all shadow-md active:scale-[0.98]"
+                      className="w-full bg-white hover:bg-slate-100 text-purple-900 font-extrabold py-3 px-4 rounded-xl text-xs transition-all shadow-md active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                      {loginRole === 'Admin' ? 'Authorize Admin Sign In' : 'Resident Portal Sign In'}
+                      <Lock className="w-3.5 h-3.5 text-purple-800" />
+                      <span>{loginRole === 'Admin' ? 'Authorize Admin Sign In' : 'Resident Portal Sign In'}</span>
                     </button>
-
-                    {loginRole === 'Admin' && (
-                      <p className="text-[9px] text-purple-300/60 text-center italic mt-1">
-                        Security Key: <span className="font-mono font-bold text-purple-200">admin123</span>
-                      </p>
-                    )}
                   </form>
+                )}
 
-                  <div className="flex flex-col gap-1.5 pb-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSocietyConnected(false);
-                        localStorage.removeItem('society_sim_is_connected');
-                        setConnectionError('');
-                        setPasswordError('');
-                      }}
-                      className="text-purple-300 hover:text-white text-xs font-bold transition-all underline text-center block mx-auto"
-                    >
-                      Disconnect / Change Society Access Code
-                    </button>
-                    <div className="text-[9px] text-purple-300/50 text-center font-mono">
-                      Secure System Guard Active
-                    </div>
+                <div className="text-center pb-2">
+                  <div className="text-[9px] text-purple-300/40 font-mono">
+                    Unified Portal Security Guard Active
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           ) : (
             // ===============================================================
@@ -946,6 +1715,8 @@ export default function MobileSimulator({
                         setTempWingsList(wingsList.join(', '));
                         setTempPostalAddress(postalAddress);
                         setTempBuildingType(buildingType);
+                        setTempStructureType(activeStructureType);
+                        setTempTowers(JSON.parse(JSON.stringify(activeTowers)));
                         setShowSettingsModal(true);
                       }}
                       className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
@@ -962,6 +1733,46 @@ export default function MobileSimulator({
                   >
                     <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin text-purple-600' : ''}`} />
                   </button>
+                  {/* Property Switcher for Multi-Flat Users */}
+                  {userRole === 'Member' && (() => {
+                    const normLoggedEmail = loggedInUserEmail.trim().toLowerCase();
+                    const myMatchingFlats = allMembers.filter(m => {
+                      const emailMatch = m.Email && normLoggedEmail && m.Email.trim().toLowerCase() === normLoggedEmail;
+                      const phoneMatch = m.ContactNo && loggedInUserContact && normalizePhone(m.ContactNo) === normalizePhone(loggedInUserContact);
+                      return emailMatch || phoneMatch;
+                    });
+                    if (myMatchingFlats.length > 1) {
+                      return (
+                        <div className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-lg px-2 py-1 shadow-2xs">
+                          <Building2 className="w-3.5 h-3.5 text-purple-600 shrink-0 animate-pulse" />
+                          <select
+                            value={`${activeSocietyId}:${loggedInMemberFlat}`}
+                            onChange={(e) => {
+                              const [socId, flatNo] = e.target.value.split(':');
+                              setLoggedInMemberFlat(flatNo);
+                              localStorage.setItem('society_sim_member_flat', flatNo);
+                              if (onChangeActiveSociety && socId) {
+                                onChangeActiveSociety(socId);
+                                localStorage.setItem('active_society_id', socId);
+                              }
+                              triggerToast(`Switched active unit to Flat ${flatNo} (${societies?.find(s => s.id === socId)?.Name || socId})`);
+                            }}
+                            className="bg-transparent border-none text-[10px] font-black focus:outline-none cursor-pointer text-purple-700 py-0.5"
+                          >
+                            {myMatchingFlats.map((prop, idx) => {
+                              const soc = societies?.find(s => s.id === prop.SocietyId);
+                              return (
+                                <option key={idx} value={`${prop.SocietyId}:${prop.FlatNo}`} className="text-slate-800 bg-white font-sans font-bold">
+                                  {soc ? soc.Name : prop.SocietyId} • Flat {prop.FlatNo}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   <button 
                     onClick={handleLogout}
                     className="p-1.5 hover:bg-rose-50 text-rose-600 border border-rose-200/50 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold px-2 py-1 shadow-2xs"
@@ -1058,6 +1869,47 @@ export default function MobileSimulator({
                                 </div>
                               </div>
 
+                              {/* Multi-Flat quick swapper inside active society */}
+                              {(() => {
+                                const normLoggedEmail = loggedInUserEmail.trim().toLowerCase();
+                                const myFlatsInActiveSociety = allMembers.filter(m => {
+                                  if (m.SocietyId !== activeSocietyId) return false;
+                                  const emailMatch = m.Email && normLoggedEmail && m.Email.trim().toLowerCase() === normLoggedEmail;
+                                  const phoneMatch = m.ContactNo && loggedInUserContact && normalizePhone(m.ContactNo) === normalizePhone(loggedInUserContact);
+                                  return emailMatch || phoneMatch;
+                                });
+                                if (myFlatsInActiveSociety.length > 1) {
+                                  return (
+                                    <div className="mt-3 pt-3 border-t border-slate-150/80 flex flex-col gap-1.5">
+                                      <p className="text-[8px] text-slate-500 font-black tracking-wide uppercase flex items-center gap-1">
+                                        <Home className="w-3 h-3 text-purple-600" />
+                                        <span>Your Flats in this Society (Click to Switch):</span>
+                                      </p>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {myFlatsInActiveSociety.map((f) => (
+                                          <button
+                                            key={f.FlatNo}
+                                            onClick={() => {
+                                              setLoggedInMemberFlat(f.FlatNo);
+                                              localStorage.setItem('society_sim_member_flat', f.FlatNo);
+                                              triggerToast(`Active View: Flat ${f.FlatNo}`);
+                                            }}
+                                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black border transition-all cursor-pointer ${
+                                              f.FlatNo === loggedInMemberFlat
+                                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                                : 'bg-white text-purple-700 border-purple-200 hover:bg-purple-100/50'
+                                            }`}
+                                          >
+                                            Flat {f.FlatNo}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+
                               {bal > 0 ? (
                                 <div className="mt-3.5 pt-3.5 border-t border-rose-100 flex gap-2">
                                   <button
@@ -1069,18 +1921,91 @@ export default function MobileSimulator({
                                   >
                                     💳 Pay Outstanding Dues
                                   </button>
+                                  <button
+                                    onClick={() => setCurrentTab('amenities')}
+                                    className="flex-1 py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl text-[10px] text-center shadow-xs transition-colors cursor-pointer"
+                                  >
+                                    📅 Book Amenity
+                                  </button>
                                 </div>
-                              ) : bal < 0 ? (
-                                <p className="text-[9px] text-emerald-600 font-medium mt-3 italic">
-                                  🎉 Your account is in credit! You have advance credit of ₹{Math.abs(bal).toLocaleString()}. No action required.
-                                </p>
                               ) : (
-                                <p className="text-[9px] text-slate-500 font-medium mt-3 italic">
-                                  🎉 Fantastic! All your dues are fully paid up. Thank you for your support.
-                                </p>
+                                <div className="mt-3.5 pt-3.5 border-t border-slate-100 flex gap-2">
+                                  <button
+                                    onClick={() => setCurrentTab('amenities')}
+                                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-xl text-[10px] text-center shadow-xs transition-colors cursor-pointer"
+                                  >
+                                    📅 Book Clubhouse & Shared Amenities
+                                  </button>
+                                </div>
                               )}
                             </div>
                           );
+                        })()}
+
+                        {/* Multiple Properties Switcher / List */}
+                        {(() => {
+                          const normLoggedEmail = loggedInUserEmail.trim().toLowerCase();
+                          const myMatchingFlats = allMembers.filter(m => {
+                            const emailMatch = m.Email && normLoggedEmail && m.Email.trim().toLowerCase() === normLoggedEmail;
+                            const phoneMatch = m.ContactNo && loggedInUserContact && normalizePhone(m.ContactNo) === normalizePhone(loggedInUserContact);
+                            return emailMatch || phoneMatch;
+                          });
+
+                          if (myMatchingFlats.length > 1) {
+                            return (
+                              <div id="multi-property-dashboard-card" className="bg-purple-50/50 border border-purple-200 p-3 rounded-2xl shadow-2xs space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] font-black text-purple-850 uppercase tracking-wider flex items-center gap-1">
+                                    🔑 My Registered Properties ({myMatchingFlats.length})
+                                  </span>
+                                  <span className="text-[7.5px] bg-purple-200 text-purple-800 px-1.5 py-0.5 rounded font-black uppercase tracking-wide">
+                                    Multi-Property Owner
+                                  </span>
+                                </div>
+                                <p className="text-[9px] text-slate-500 leading-tight">
+                                  You own multiple units in our managed societies. Tap any property below to switch your active view:
+                                </p>
+                                <div className="grid grid-cols-1 gap-1.5 mt-1">
+                                  {myMatchingFlats.map((prop, idx) => {
+                                    const soc = societies.find(s => s.id === prop.SocietyId);
+                                    const isActive = prop.SocietyId === activeSocietyId && prop.FlatNo === loggedInMemberFlat;
+                                    return (
+                                      <button
+                                        key={idx}
+                                        id={`dashboard-prop-switch-${idx}`}
+                                        onClick={() => handleSelectProperty(prop)}
+                                        className={`w-full p-2.5 rounded-xl text-left transition-all border flex items-center justify-between text-[10px] cursor-pointer ${
+                                          isActive
+                                            ? 'bg-purple-600 border-purple-700 text-white font-extrabold shadow-sm'
+                                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                                        }`}
+                                      >
+                                        <div className="min-w-0 flex-1 pr-2">
+                                          <div className="flex items-center gap-1">
+                                            <span className="font-extrabold truncate max-w-[140px]">{soc ? soc.Name : prop.SocietyId}</span>
+                                            {isActive && (
+                                              <span className="text-[8px] bg-white text-purple-700 px-1 py-0.5 rounded font-black uppercase leading-none shrink-0 scale-90">
+                                                Active
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className={`text-[8px] ${isActive ? 'text-purple-200' : 'text-slate-500'} mt-0.5`}>
+                                            Flat {prop.FlatNo} {prop.Tower ? `• ${prop.Tower} - ${prop.Wing}` : (prop.Wing ? `• ${prop.Wing}` : '')}
+                                          </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                          <span className={`font-mono text-[9px] font-bold ${isActive ? 'text-white' : (prop.Balance > 0 ? 'text-rose-600' : 'text-emerald-600')}`}>
+                                            {prop.Balance > 0 ? `Dues: ₹${prop.Balance.toLocaleString()}` : 'Paid'}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
                         })()}
 
                         {/* Recent Notices Bulletin for member */}
@@ -1149,6 +2074,106 @@ export default function MobileSimulator({
                             >
                               <Plus className="w-3.5 h-3.5" /> File New Helpdesk complaint
                             </button>
+                          </div>
+                        </div>
+
+                        {/* Resident Gatekeeper & Visitor Management Simulator */}
+                        <div id="visitor-manager-resident-card" className="bg-white p-3 rounded-2xl border border-slate-150 shadow-xs space-y-2">
+                          <div className="flex justify-between items-center px-0.5">
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                              Gatekeeper Visitor Logs
+                            </span>
+                            <button
+                              onClick={() => {
+                                setNewVisName('');
+                                setNewVisContact('');
+                                setNewVisVehicle('');
+                                setNewVisPurpose('Delivery');
+                                setShowAddVisitorModal(true);
+                              }}
+                              className="text-[9px] font-bold text-purple-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" /> Pre-Approve Guest
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {/* Pending Approvals (High Visibility Alerts) */}
+                            {visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status === 'Pending Approval' && v.SocietyId === activeSocietyId).map(v => (
+                              <div key={v.id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-1.5 animate-pulse shadow-sm">
+                                <div className="flex justify-between items-start text-[10px]">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="bg-amber-150 text-amber-900 border border-amber-200 font-extrabold text-[7.5px] px-1.5 py-0.5 rounded uppercase tracking-wide inline-block leading-none">
+                                      🔔 Gate Authorization Request
+                                    </span>
+                                    <h5 className="font-extrabold text-slate-900 mt-1.5 truncate">{v.VisitorName}</h5>
+                                    <p className="text-[8.5px] text-slate-600 mt-0.5">Purpose: <strong className="text-slate-800">{v.Purpose}</strong> {v.VehicleNo ? `• Vehicle: ${v.VehicleNo}` : ''}</p>
+                                  </div>
+                                  <span className="text-[7.5px] text-slate-400 font-mono shrink-0">
+                                    {new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <div className="flex gap-1.5 mt-1">
+                                  <button
+                                    onClick={() => {
+                                      if (onUpdateVisitor) {
+                                        onUpdateVisitor(v.id, 'Approved', members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident');
+                                        triggerToast('Visitor access APPROVED at the gate!');
+                                      }
+                                    }}
+                                    className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[9px] transition-colors cursor-pointer text-center"
+                                  >
+                                    Approve Entry
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (onUpdateVisitor) {
+                                        onUpdateVisitor(v.id, 'Denied', members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident');
+                                        triggerToast('Visitor access DENIED!');
+                                      }
+                                    }}
+                                    className="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-[9px] transition-colors cursor-pointer text-center"
+                                  >
+                                    Deny Entry
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+
+                            {/* Normal Logs List */}
+                            <div className="space-y-1">
+                              {(() => {
+                                const myVisitors = visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status !== 'Pending Approval' && v.SocietyId === activeSocietyId);
+                                const pendingCount = visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status === 'Pending Approval' && v.SocietyId === activeSocietyId).length;
+                                if (myVisitors.length === 0 && pendingCount === 0) {
+                                  return (
+                                    <p className="text-center text-[9px] text-slate-400 py-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">No active visitor logs or pre-approvals</p>
+                                  );
+                                }
+                                return myVisitors.slice(0, 3).map(v => (
+                                  <div key={v.id} className="p-2 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-[10px]">
+                                    <div className="min-w-0 pr-2">
+                                      <h5 className="font-extrabold text-slate-800 truncate">{v.VisitorName}</h5>
+                                      <p className="text-[8px] text-slate-400 mt-0.5 font-semibold">
+                                        {v.Purpose} • {v.CheckOutTime ? `Checked Out: ${new Date(v.CheckOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : `In: ${new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                      </p>
+                                    </div>
+                                    <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                                      v.Status === 'Approved'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                        : v.Status === 'Pre-Approved'
+                                        ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                        : v.Status === 'Checked Out'
+                                        ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                        : 'bg-rose-50 text-rose-700 border border-rose-100'
+                                    }`}>
+                                      {v.Status}
+                                    </span>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
                           </div>
                         </div>
                       </>
@@ -1418,6 +2443,358 @@ export default function MobileSimulator({
                             })()}
                           </div>
                         </div>
+
+                        {/* Automated Billing & Maintenance Invoicing Engine */}
+                        <div id="admin-billing-engine-card" className="bg-white p-3.5 rounded-2xl border border-slate-150 shadow-xs space-y-3">
+                          <div className="flex justify-between items-center px-0.5">
+                            <div>
+                              <h4 className="text-[11px] font-extrabold text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
+                                <span className="p-1 bg-amber-50 text-amber-600 rounded-lg border border-amber-100">⚡</span>
+                                Automated Billing Invoicing Engine
+                              </h4>
+                              <p className="text-[8px] text-slate-400 font-semibold mt-0.5">Generate monthly recurring maintenance bills for all resident units</p>
+                            </div>
+                            <span className="text-[7.5px] font-black bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-100 uppercase tracking-wide">
+                              Live Run
+                            </span>
+                          </div>
+
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 space-y-2 text-[10px]">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="font-extrabold text-slate-600 block">Billing Month</label>
+                                <select
+                                  value={billingMonth}
+                                  onChange={(e) => setBillingMonth(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded focus:outline-none focus:border-indigo-500 font-sans"
+                                >
+                                  <option value="July 2026">July 2026</option>
+                                  <option value="August 2026">August 2026</option>
+                                  <option value="September 2026">September 2026</option>
+                                  <option value="October 2026">October 2026</option>
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="font-extrabold text-slate-600 block">Base Maintenance (₹)</label>
+                                <input
+                                  type="number"
+                                  value={billBase}
+                                  onChange={(e) => setBillBase(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-sans font-bold"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <div className="space-y-0.5">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Water Dues (₹)</label>
+                                <input
+                                  type="number"
+                                  value={billWater}
+                                  onChange={(e) => setBillWater(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-sans font-medium text-[9.5px]"
+                                />
+                              </div>
+                              <div className="space-y-0.5">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Security Dues (₹)</label>
+                                <input
+                                  type="number"
+                                  value={billSecurity}
+                                  onChange={(e) => setBillSecurity(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-sans font-medium text-[9.5px]"
+                                />
+                              </div>
+                              <div className="space-y-0.5">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Parking/Utility (₹)</label>
+                                <input
+                                  type="number"
+                                  value={billParking}
+                                  onChange={(e) => setBillParking(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-sans font-medium text-[9.5px]"
+                                />
+                              </div>
+                            </div>
+
+                            {/* Live Invoice Breakdown Calculations */}
+                            {(() => {
+                              const baseVal = parseInt(billBase) || 0;
+                              const waterVal = parseInt(billWater) || 0;
+                              const secVal = parseInt(billSecurity) || 0;
+                              const parkVal = parseInt(billParking) || 0;
+                              const totalPerUnit = baseVal + waterVal + secVal + parkVal;
+                              const estimatedTotalCollection = totalPerUnit * (members.length || 0);
+
+                              return (
+                                <div className="bg-indigo-50/55 p-2 rounded-lg border border-indigo-100 flex justify-between items-center text-[9px] mt-1 text-indigo-950 font-semibold">
+                                  <div>
+                                    <span className="block">Dues / Unit: <strong>₹{totalPerUnit.toLocaleString()}</strong></span>
+                                    <span className="text-[7.5px] text-slate-500 font-normal font-sans">Base + Water + Security + Util</span>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="block text-indigo-700 font-sans">Total Run Collection: <strong>₹{estimatedTotalCollection.toLocaleString()}</strong></span>
+                                    <span className="text-[7.5px] text-slate-500 font-normal">For {members.length} Active Flats</span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const baseVal = parseInt(billBase) || 0;
+                                const waterVal = parseInt(billWater) || 0;
+                                const secVal = parseInt(billSecurity) || 0;
+                                const parkVal = parseInt(billParking) || 0;
+                                const totalPerUnit = baseVal + waterVal + secVal + parkVal;
+
+                                if (totalPerUnit <= 0) {
+                                  triggerToast('Please set a valid invoice total amount!');
+                                  return;
+                                }
+
+                                if (onAddInvoice) {
+                                  let count = 0;
+                                  members.forEach(m => {
+                                    onAddInvoice({
+                                      SocietyId: activeSocietyId,
+                                      FlatNo: m.FlatNo,
+                                      OwnerName: m.OwnerName,
+                                      BillMonth: billingMonth,
+                                      BaseAmount: baseVal,
+                                      WaterCharges: waterVal,
+                                      SecurityCharges: secVal,
+                                      ParkingCharges: parkVal,
+                                      TotalAmount: totalPerUnit,
+                                      DueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                                      Status: 'Unpaid',
+                                      IssuedDate: new Date().toISOString().split('T')[0]
+                                    });
+                                    count++;
+                                  });
+
+                                  if (onAddNotice) {
+                                    onAddNotice({
+                                      title: `${billingMonth} Maintenance Dues Invoiced`,
+                                      category: 'Maintenance',
+                                      content: `Automated maintenance invoices for ${billingMonth} have been successfully generated and sent to all units.\n\nTotal Due Per Unit: ₹${totalPerUnit.toLocaleString()}\n• Base Rate: ₹${baseVal}\n• Water Charges: ₹${waterVal}\n• Security Guard Dues: ₹${secVal}\n• Parking/Utility: ₹${parkVal}\n\nPlease clear your pending dues within 15 days of invoice date to avoid late payment fee penalties. Thank you.`
+                                    });
+                                  }
+
+                                  triggerToast(`Successfully generated ${count} invoices for ${billingMonth}!`);
+                                } else {
+                                  triggerToast('Billing service unavailable');
+                                }
+                              }}
+                              className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl transition-colors cursor-pointer text-center text-[10px]"
+                            >
+                              ⚡ Execute Automated Invoicing Run
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Gatekeeper & Visitor Management Simulator */}
+                        <div id="admin-gatekeeper-simulator-card" className="bg-white p-3.5 rounded-2xl border border-slate-150 shadow-xs space-y-3">
+                          <div className="flex justify-between items-center px-0.5">
+                            <div>
+                              <h4 className="text-[11px] font-extrabold text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
+                                <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                                Simulated Gatekeeper Console
+                              </h4>
+                              <p className="text-[8px] text-slate-400 font-semibold mt-0.5">Simulate check-ins at the security cabin</p>
+                            </div>
+                            <span className="text-[7px] font-black bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wide">
+                              Active Terminal
+                            </span>
+                          </div>
+
+                          {/* Quick Check-in form */}
+                          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-[10px] space-y-2">
+                            <h5 className="font-black text-slate-700 text-[9px] uppercase tracking-wider mb-1">New Gate Check-In Entry</h5>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-0.5">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Visitor Name</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Rajesh Kumar"
+                                  value={newVisName}
+                                  onChange={(e) => setNewVisName(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-sans"
+                                />
+                              </div>
+
+                              <div className="space-y-0.5">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Target Flat Unit</label>
+                                <select
+                                  value={newVisFlatNo}
+                                  onChange={(e) => setNewVisFlatNo(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded focus:outline-none focus:border-indigo-500 font-sans"
+                                >
+                                  <option value="">-- Choose Flat --</option>
+                                  {members.map(m => (
+                                    <option key={m.id} value={m.FlatNo}>Flat {m.FlatNo} ({m.OwnerName})</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <div className="space-y-0.5">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Purpose</label>
+                                <select
+                                  value={newVisPurpose}
+                                  onChange={(e) => setNewVisPurpose(e.target.value)}
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded focus:outline-none focus:border-indigo-500 font-sans"
+                                >
+                                  <option value="Delivery">Delivery</option>
+                                  <option value="Guest">Guest</option>
+                                  <option value="Cab">Uber / Ola</option>
+                                  <option value="Services">Services</option>
+                                  <option value="Maintenance">Maintenance</option>
+                                </select>
+                              </div>
+
+                              <div className="space-y-0.5 col-span-2">
+                                <label className="font-bold text-slate-500 text-[8.5px] block">Contact No & Vehicle No</label>
+                                <div className="flex gap-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Contact (optional)"
+                                    value={newVisContact}
+                                    onChange={(e) => setNewVisContact(e.target.value)}
+                                    className="flex-1 bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-sans text-[9px]"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="MH-12-XX-0000"
+                                    value={newVisVehicle}
+                                    onChange={(e) => setNewVisVehicle(e.target.value)}
+                                    className="w-[85px] bg-white border border-slate-300 p-1 rounded focus:outline-none focus:border-indigo-500 font-mono text-[9px]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newVisName.trim()) {
+                                  triggerToast('Visitor Name is required!');
+                                  return;
+                                }
+                                if (!newVisFlatNo) {
+                                  triggerToast('Please select a target Flat No!');
+                                  return;
+                                }
+
+                                if (onAddVisitor) {
+                                  onAddVisitor({
+                                    VisitorName: newVisName.trim(),
+                                    Purpose: newVisPurpose,
+                                    ContactNo: newVisContact.trim() || 'Not Provided',
+                                    FlatNo: newVisFlatNo,
+                                    VehicleNo: newVisVehicle.trim() || undefined,
+                                    Status: 'Pending Approval',
+                                    CheckInTime: new Date().toISOString(),
+                                    SocietyId: activeSocietyId
+                                  });
+
+                                  triggerToast(`Logged check-in entry for ${newVisName.trim()} (Flat ${newVisFlatNo})!`);
+                                  setNewVisName('');
+                                  setNewVisContact('');
+                                  setNewVisVehicle('');
+                                } else {
+                                  triggerToast('Visitor service unavailable');
+                                }
+                              }}
+                              className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl transition-colors cursor-pointer text-center text-[9.5px]"
+                            >
+                              🔔 Register Entry & Alert Resident Host
+                            </button>
+                          </div>
+
+                          {/* Visitor live status listings */}
+                          <div className="space-y-1.5">
+                            <h5 className="font-black text-slate-700 text-[9px] uppercase tracking-wider px-0.5">Live Visitors on Site</h5>
+                            <div className="space-y-1">
+                              {(() => {
+                                const activeVisitors = visitors.filter(v => v.SocietyId === activeSocietyId);
+                                if (activeVisitors.length === 0) {
+                                  return (
+                                    <p className="text-center text-[9px] text-slate-400 py-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">No visitor logs recorded yet</p>
+                                  );
+                                }
+                                return activeVisitors.slice(0, 4).map(v => (
+                                  <div key={v.id} className="p-2 bg-slate-50 border border-slate-150 rounded-xl flex justify-between items-center text-[10px]">
+                                    <div className="min-w-0 flex-1 pr-2">
+                                      <div className="flex items-center gap-1.5">
+                                        <h5 className="font-extrabold text-slate-800 truncate max-w-[120px]">{v.VisitorName}</h5>
+                                        <span className="text-[7.5px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-black font-sans uppercase">
+                                          Flat {v.FlatNo}
+                                        </span>
+                                      </div>
+                                      <p className="text-[8px] text-slate-400 mt-0.5">
+                                        Purpose: <strong>{v.Purpose}</strong> {v.CheckOutTime ? `• Out: ${new Date(v.CheckOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : `• In: ${new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                      </p>
+                                    </div>
+                                    <div className="shrink-0 text-right flex items-center gap-1.5">
+                                      <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${
+                                        v.Status === 'Approved'
+                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                          : v.Status === 'Pending Approval'
+                                          ? 'bg-amber-50 text-amber-700 border border-amber-100 animate-pulse'
+                                          : v.Status === 'Checked Out'
+                                          ? 'bg-slate-100 text-slate-500 border border-slate-200'
+                                          : 'bg-rose-50 text-rose-700 border border-rose-100'
+                                      }`}>
+                                        {v.Status === 'Pending Approval' ? 'Awaiting Host' : v.Status}
+                                      </span>
+
+                                      {/* Checkout Action if status is Approved */}
+                                      {v.Status === 'Approved' && onUpdateVisitor && (
+                                        <button
+                                          onClick={() => {
+                                            onUpdateVisitor(v.id, 'Checked Out');
+                                            triggerToast('Visitor checked out successfully!');
+                                          }}
+                                          className="text-[8px] bg-slate-200 hover:bg-slate-300 text-slate-700 px-2 py-0.5 rounded font-bold cursor-pointer"
+                                        >
+                                          Check Out
+                                        </button>
+                                      )}
+
+                                      {/* Admin Override if status is Pending */}
+                                      {v.Status === 'Pending Approval' && onUpdateVisitor && (
+                                        <div className="flex gap-0.5">
+                                          <button
+                                            onClick={() => {
+                                              onUpdateVisitor(v.id, 'Approved', 'Admin Override');
+                                              triggerToast('Admin Force-Approved entry!');
+                                            }}
+                                            className="text-[7.5px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-black cursor-pointer leading-none"
+                                            title="Admin Approve Override"
+                                          >
+                                            ✓
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              onUpdateVisitor(v.id, 'Denied', 'Admin Override');
+                                              triggerToast('Admin Force-Denied entry!');
+                                            }}
+                                            className="text-[7.5px] bg-rose-600 text-white px-1.5 py-0.5 rounded font-black cursor-pointer leading-none"
+                                            title="Admin Deny Override"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+                        </div>
                       </>
                     )}
                   </div>
@@ -1481,7 +2858,12 @@ export default function MobileSimulator({
                               <div className="flex justify-between items-start border-b border-slate-100 pb-2">
                                 <div className="flex items-center gap-2">
                                   <div className="w-9 h-9 rounded-xl bg-purple-100/80 text-purple-700 flex flex-col items-center justify-center font-bold text-xs border border-purple-100/50 leading-none shadow-3xs flex-shrink-0">
-                                    {hasWings && member.Wing ? (
+                                    {member.Tower ? (
+                                      <>
+                                        <span className="text-[6.5px] text-purple-600 uppercase tracking-wider font-extrabold mb-0.5 truncate max-w-[34px]" title={`${member.Tower} - Wing ${member.Wing}`}>{member.Tower}-{member.Wing}</span>
+                                        <span className="text-[10px] font-extrabold">{member.FlatNo}</span>
+                                      </>
+                                    ) : hasWings && member.Wing ? (
                                       <>
                                         <span className="text-[7px] text-purple-500 uppercase tracking-widest font-black mb-0.5">{member.Wing}</span>
                                         <span className="text-[10px] font-extrabold">{member.FlatNo}</span>
@@ -1719,6 +3101,75 @@ export default function MobileSimulator({
                       </div>
                     )}
 
+                    {/* Issued Invoices Section */}
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-0.5 mt-2">Issued Maintenance Invoices</h4>
+                      {(() => {
+                        const filteredInvoices = invoices.filter(inv => {
+                          const socMatch = inv.SocietyId === activeSocietyId;
+                          if (!socMatch) return false;
+                          if (userRole === 'Member') {
+                            return inv.FlatNo === loggedInMemberFlat;
+                          }
+                          return true;
+                        });
+
+                        if (filteredInvoices.length === 0) {
+                          return (
+                            <p className="text-center text-[9px] text-slate-400 py-3 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                              No maintenance bills have been issued for this society yet.
+                            </p>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-0.5">
+                            {filteredInvoices.map((inv) => (
+                              <div key={inv.id} className="bg-slate-50 hover:bg-slate-100/50 p-2.5 rounded-xl border border-slate-150 flex justify-between items-center text-[10px] transition-colors">
+                                <div className="min-w-0 pr-2">
+                                  <div className="flex items-center gap-1.5">
+                                    <h5 className="font-extrabold text-slate-800">Bill cycle: {inv.BillMonth}</h5>
+                                    <span className="text-[7.5px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-black font-sans uppercase">
+                                      Flat {inv.FlatNo}
+                                    </span>
+                                  </div>
+                                  <p className="text-[8px] text-slate-400 mt-0.5">
+                                    Base: ₹{inv.BaseAmount} • Water: ₹{inv.WaterCharges} • Sec: ₹{inv.SecurityCharges} • Util: ₹{inv.ParkingCharges}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 text-right flex items-center gap-1.5">
+                                  <div>
+                                    <span className="text-[11px] font-black block text-slate-800">₹{inv.TotalAmount}</span>
+                                    <span className={`text-[7px] font-black px-1.5 py-0.2 rounded-full inline-block mt-0.5 ${
+                                      inv.Status === 'Paid' 
+                                        ? 'bg-emerald-100 text-emerald-800' 
+                                        : 'bg-rose-100 text-rose-800'
+                                    }`}>
+                                      {inv.Status}
+                                    </span>
+                                  </div>
+
+                                  {inv.Status === 'Unpaid' && userRole === 'Member' && (
+                                    <button
+                                      onClick={() => {
+                                        setMemberPayAmount(String(inv.TotalAmount));
+                                        setShowMemberPayModal(true);
+                                      }}
+                                      className="text-[8.5px] bg-purple-600 hover:bg-purple-700 text-white font-extrabold px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      Pay
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-0.5 mt-2">Cleared Payments History</h4>
+
                     <div className="space-y-2">
                       {filteredPayments.length > 0 ? (
                         filteredPayments.map((pmt, i) => (
@@ -1894,7 +3345,26 @@ export default function MobileSimulator({
                 {/* ----------------- TABS: NOTICES ----------------- */}
                 {currentTab === 'notices' && (
                   <div className="space-y-2.5">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Bulletins</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Bulletins</span>
+                      {userRole === 'Admin' && (
+                        <button
+                          onClick={() => {
+                            setNewNoticeTitle('');
+                            setNewNoticeContent('');
+                            setNewNoticeCategory('General');
+                            setNewNoticeFileName('');
+                            setNewNoticeFileUrl('');
+                            setNewNoticeFileSize('');
+                            setIsBroadcastModalOpen(true);
+                          }}
+                          className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9px] font-black tracking-wide transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Draft Notice</span>
+                        </button>
+                      )}
+                    </div>
 
                     <div className="space-y-2">
                       {notices.length > 0 ? (
@@ -1926,6 +3396,17 @@ export default function MobileSimulator({
                     </div>
                   </div>
                 )}
+
+                {currentTab === 'amenities' && (
+                  <FacilityBookingManager
+                    societyId={activeSocietyId}
+                    loggedInMemberFlat={loggedInMemberFlat}
+                    loggedInMemberName={activeResidentMember.OwnerName}
+                    members={members}
+                    onAddDues={onAddDues || (() => {})}
+                    onAddAuditLog={onAddAuditLog || (() => {})}
+                  />
+                )}
               </div>
 
               {/* Bottom Navigation Tabs */}
@@ -1938,29 +3419,51 @@ export default function MobileSimulator({
                   <span className="text-[8px]">Dashboard</span>
                 </button>
 
-                <button 
-                  onClick={() => { setCurrentTab('members'); setSearchQuery(''); }}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'members' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <Users className="w-4 h-4" />
-                  <span className="text-[8px]">Members</span>
-                </button>
+                {userRole === 'Admin' ? (
+                  <>
+                    <button 
+                      onClick={() => { setCurrentTab('members'); setSearchQuery(''); }}
+                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'members' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <Users className="w-4 h-4" />
+                      <span className="text-[8px]">Members</span>
+                    </button>
 
-                <button 
-                  onClick={() => setCurrentTab('payments')}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'payments' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  <span className="text-[8px]">Payments</span>
-                </button>
+                    <button 
+                      onClick={() => setCurrentTab('payments')}
+                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'payments' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span className="text-[8px]">Payments</span>
+                    </button>
 
-                <button 
-                  onClick={() => setCurrentTab('expenses')}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'expenses' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
-                >
-                  <TrendingDown className="w-4 h-4" />
-                  <span className="text-[8px]">Expenses</span>
-                </button>
+                    <button 
+                      onClick={() => setCurrentTab('expenses')}
+                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'expenses' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <TrendingDown className="w-4 h-4" />
+                      <span className="text-[8px]">Expenses</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => setCurrentTab('payments')}
+                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'payments' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <CreditCard className="w-4 h-4" />
+                      <span className="text-[8px]">My Ledger</span>
+                    </button>
+
+                    <button 
+                      onClick={() => setCurrentTab('amenities')}
+                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'amenities' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                    >
+                      <Calendar className="w-4 h-4" />
+                      <span className="text-[8px]">Amenities</span>
+                    </button>
+                  </>
+                )}
 
                 <button 
                   onClick={() => { setCurrentTab('complaints'); setComplaintFilter('All'); }}
@@ -2284,6 +3787,81 @@ export default function MobileSimulator({
                       )}
                     </div>
                   )}
+
+                  {/* --- CONVERSATION THREAD --- */}
+                  <div className="border-t border-slate-100 pt-4 mt-2">
+                    <div className="flex items-center gap-1.5 mb-3">
+                      <MessageSquare className="w-4 h-4 text-purple-600" />
+                      <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight">Interactive Discussion</h3>
+                      <span className="bg-purple-100 text-purple-700 text-[8px] px-1.5 py-0.5 rounded-full font-bold font-mono">
+                        {complaintReplies.filter(r => r.ComplaintId === activeComplaintDetail.id).length} Replies
+                      </span>
+                    </div>
+
+                    {/* Messages Bubble Stack */}
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto mb-3 pr-1 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      {(() => {
+                        const replies = complaintReplies.filter(r => r.ComplaintId === activeComplaintDetail.id);
+                        if (replies.length === 0) {
+                          return (
+                            <div className="text-center py-4 text-slate-400">
+                              <MessageSquare className="w-6 h-6 mx-auto mb-1 opacity-20 text-slate-400" />
+                              <p className="text-[9px]">No official comments or discussion on this alert yet. Use the input below to start the conversation.</p>
+                            </div>
+                          );
+                        }
+                        return replies.map(r => {
+                          const isAdmin = r.SenderRole === 'Admin';
+                          return (
+                            <div
+                              key={r.id}
+                              className={`flex flex-col max-w-[90%] rounded-xl p-2 text-[10px] leading-relaxed shadow-2xs transition-all ${
+                                isAdmin
+                                  ? 'bg-purple-50 border border-purple-100/55 ml-auto text-purple-950'
+                                  : 'bg-white border border-slate-200 mr-auto text-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 mb-1 justify-between">
+                                <span className="font-extrabold text-slate-700 truncate">{r.SenderName}</span>
+                                <span className={`text-[7px] px-1 rounded-full uppercase font-black ${
+                                  isAdmin ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {r.SenderRole}
+                                </span>
+                              </div>
+                              <p className="whitespace-pre-wrap">{r.Message}</p>
+                              <span className="text-[6.5px] text-slate-400 mt-1 self-end">
+                                {new Date(r.Timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+
+                    {/* Message Input Box */}
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Type a message or response..."
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSendReply();
+                          }
+                        }}
+                        className="flex-1 bg-white border border-slate-300 px-2 py-1 rounded-lg text-[10px] focus:outline-none focus:border-purple-500 font-sans"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSendReply}
+                        className="bg-purple-600 hover:bg-purple-700 text-white p-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center shrink-0"
+                      >
+                        <Send className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2314,16 +3892,179 @@ export default function MobileSimulator({
                 </div>
 
                 {activeNoticeDetail.AttachmentUrl && (
-                  <a
-                    href={activeNoticeDetail.AttachmentUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-2.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl font-bold hover:bg-purple-100 text-[11px] flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Download Official Document / PDF
-                  </a>
+                  <div className="space-y-2 pt-1 text-left">
+                    <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block">Attached Memo Circular</span>
+                    <div className="p-3 bg-purple-50/50 border border-purple-100/70 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-purple-600 text-white flex flex-col items-center justify-center font-bold relative overflow-hidden shrink-0">
+                          <span className="text-[7px] opacity-75 uppercase">FILE</span>
+                          <span className="text-[10px] font-black -mt-0.5">
+                            {activeNoticeDetail.AttachmentName ? activeNoticeDetail.AttachmentName.split('.').pop()?.toUpperCase() : 'PDF'}
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-slate-800 text-[10px] truncate">
+                            {activeNoticeDetail.AttachmentName || 'Official_Circular_Notice.pdf'}
+                          </p>
+                          <p className="text-[8.5px] text-slate-400 font-bold">
+                            {activeNoticeDetail.AttachmentSize || '1.2 MB'} • Verified Document
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        <button
+                          onClick={() => {
+                            setPreviewingNotice(activeNoticeDetail);
+                          }}
+                          className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[9px] font-black transition-colors flex items-center gap-1 cursor-pointer shadow-3xs"
+                        >
+                          <span>Preview Circular</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <a
+                      href={activeNoticeDetail.AttachmentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full py-2 bg-slate-100 text-slate-600 border border-slate-200 rounded-xl font-bold hover:bg-slate-200 text-[10px] flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Download External Copy
+                    </a>
+                  </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Immersive Circular Document Previewer Modal */}
+          {previewingNotice && (
+            <div className="absolute inset-0 bg-slate-900/90 z-55 flex flex-col text-xs">
+              {/* Header bar */}
+              <div className="px-4 py-3 bg-slate-800 text-white flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 animate-pulse" />
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-[10px] truncate leading-normal text-slate-200">
+                      {previewingNotice.AttachmentName || 'Official_Circular.pdf'}
+                    </h3>
+                    <p className="text-[8px] text-slate-400 font-medium">Digital Verification Seal Active</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-1 bg-slate-700 px-2 py-0.5 rounded-md">
+                    <button 
+                      onClick={() => setViewerZoom(Math.max(50, viewerZoom - 25))}
+                      className="text-white hover:text-purple-300 font-black text-[11px] cursor-pointer px-1 active:scale-90"
+                    >
+                      -
+                    </button>
+                    <span className="text-[9px] font-bold font-mono text-purple-200">{viewerZoom}%</span>
+                    <button 
+                      onClick={() => setViewerZoom(Math.min(200, viewerZoom + 25))}
+                      className="text-white hover:text-purple-300 font-black text-[11px] cursor-pointer px-1 active:scale-90"
+                    >
+                      +
+                    </button>
+                  </div>
+                  
+                  <button 
+                    onClick={() => setPreviewingNotice(null)}
+                    className="p-1 hover:bg-slate-700 rounded-md text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* View area */}
+              <div className="flex-1 overflow-auto bg-slate-950/80 p-4 flex justify-center items-start">
+                <div 
+                  style={{ transform: `scale(${viewerZoom / 100})`, transformOrigin: 'top center' }}
+                  className="w-full max-w-[340px] bg-white text-slate-800 p-6 rounded-lg shadow-2xl space-y-4 relative border border-slate-200 transition-all shrink-0 my-2"
+                >
+                  {/* Letterhead */}
+                  <div className="border-b-2 border-double border-slate-400 pb-3 text-center space-y-1 relative">
+                    <div className="absolute right-0 top-0 w-8 h-8 rounded-full border border-slate-350 flex items-center justify-center text-[6px] text-slate-400 font-bold border-dashed uppercase rotate-12">
+                      Official
+                    </div>
+                    <span className="text-[8px] uppercase tracking-widest font-black text-purple-600 block">Co-operative Housing Society</span>
+                    <h1 className="text-sm font-black text-slate-900 tracking-tight uppercase leading-tight">{societyName || 'Greenwood Residency'}</h1>
+                    <p className="text-[7.5px] text-slate-500 font-semibold leading-normal">{postalAddress || '12-A, Link Road, Mumbai'}</p>
+                    <div className="flex justify-between items-center text-[8px] text-slate-400 font-mono font-bold pt-1">
+                      <span>REF: CHS/NOT/2026/{previewingNotice.id}</span>
+                      <span>DATE: {previewingNotice.Date}</span>
+                    </div>
+                  </div>
+
+                  {/* Circular Title */}
+                  <div className="text-center space-y-1 pt-1">
+                    <h2 className="text-[11px] font-black text-slate-900 uppercase tracking-wide underline decoration-slate-400 underline-offset-4">
+                      {previewingNotice.Title}
+                    </h2>
+                    <span className="text-[8px] bg-purple-100 text-purple-800 font-extrabold px-1.5 py-0.5 rounded uppercase tracking-wider block mx-auto w-max">
+                      {previewingNotice.Category}
+                    </span>
+                  </div>
+
+                  {/* Circular Content Memo Body */}
+                  <div className="text-[9.5px] leading-relaxed text-slate-700 space-y-2.5 font-sans font-medium text-justify">
+                    <p className="font-bold">Dear Members/Residents,</p>
+                    <p className="whitespace-pre-wrap">{previewingNotice.Content}</p>
+                    <p className="pt-2 leading-relaxed">
+                      We solicit the active co-operation and compliance of all residents to ensure the smooth administration and maintenance of our society property.
+                    </p>
+                  </div>
+
+                  {/* Tables / Rules mock detail block if Category is Maintenance or Meeting */}
+                  {(previewingNotice.Category === 'Maintenance' || previewingNotice.Category === 'Meeting') && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 pt-1 text-[8px] space-y-1 text-left">
+                      <span className="font-extrabold text-slate-500 uppercase tracking-wider block">Reference Schedule / Agenda</span>
+                      <div className="grid grid-cols-3 border-b border-slate-200 pb-1 font-extrabold text-slate-600">
+                        <span>Item</span>
+                        <span>Timings</span>
+                        <span className="text-right">Action Req.</span>
+                      </div>
+                      <div className="grid grid-cols-3 text-slate-500 font-semibold">
+                        <span>01. Session Brief</span>
+                        <span>10:00 AM - 11:30 AM</span>
+                        <span className="text-right">Attendance</span>
+                      </div>
+                      <div className="grid grid-cols-3 text-slate-500 font-semibold">
+                        <span>02. Resolution Vote</span>
+                        <span>11:30 AM - 12:45 PM</span>
+                        <span className="text-right">Mandatory Vote</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sign-off Seal & Signatures */}
+                  <div className="border-t border-slate-200 pt-4 flex justify-between items-end relative min-h-[55px] text-left">
+                    {/* Simulated Seal */}
+                    <div className="absolute left-[30%] bottom-1.5 w-12 h-12 rounded-full border-2 border-blue-400/30 flex flex-col items-center justify-center font-bold text-[6px] text-blue-500/40 uppercase rotate-[-15deg] pointer-events-none select-none">
+                      <span className="tracking-widest">SOCIETY</span>
+                      <span>★ SEAL ★</span>
+                      <span>MUMBAI</span>
+                    </div>
+
+                    <div className="text-left">
+                      <div className="text-[7.5px] text-slate-400 font-mono uppercase tracking-wider font-bold">Verified digital signature</div>
+                      <div className="font-mono italic text-[11px] font-bold text-slate-500 select-none tracking-widest leading-none mt-1 select-none">S. K. Mehta</div>
+                      <p className="text-[8px] font-black text-slate-800 leading-normal">Shreejit K. Mehta</p>
+                      <p className="text-[7.5px] text-slate-400 font-bold uppercase leading-none">Honorary Secretary</p>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-[7.5px] text-slate-400 font-mono uppercase tracking-wider font-bold">Authorized Sign-off</div>
+                      <div className="font-mono italic text-[11px] font-bold text-indigo-500 select-none tracking-widest leading-none mt-1 select-none">A. Sharma</div>
+                      <p className="text-[8px] font-black text-slate-800 leading-normal">Amit Sharma</p>
+                      <p className="text-[7.5px] text-slate-400 font-bold uppercase leading-none">Managing Committee Chair</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2567,6 +4308,110 @@ export default function MobileSimulator({
             </div>
           )}
 
+          {/* Pre-Approve Guest Modal Popup */}
+          {showAddVisitorModal && (
+            <div className="absolute inset-0 bg-white z-50 flex flex-col text-xs">
+              <div className="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                <h3 className="font-bold text-slate-700">Pre-Approve Incoming Guest</h3>
+                <button onClick={() => setShowAddVisitorModal(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newVisName.trim()) {
+                    triggerToast('Guest Name is required!');
+                    return;
+                  }
+
+                  if (onAddVisitor) {
+                    onAddVisitor({
+                      VisitorName: newVisName.trim(),
+                      Purpose: newVisPurpose,
+                      ContactNo: newVisContact.trim() || 'Pre-Approved',
+                      FlatNo: loggedInMemberFlat,
+                      VehicleNo: newVisVehicle.trim() || undefined,
+                      Status: 'Pre-Approved',
+                      CheckInTime: new Date().toISOString(),
+                      SocietyId: activeSocietyId
+                    });
+
+                    triggerToast(`Pre-approved guest ${newVisName.trim()} successfully!`);
+                    setShowAddVisitorModal(false);
+                    setNewVisName('');
+                    setNewVisContact('');
+                    setNewVisVehicle('');
+                  } else {
+                    triggerToast('Visitor service unavailable');
+                  }
+                }}
+                className="flex-1 p-4 space-y-4 overflow-y-auto"
+              >
+                <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 text-purple-950 font-medium">
+                  🏠 Pre-authorizing entry for <strong>Unit {loggedInMemberFlat}</strong>.
+                  The security gatekeeper will see this pre-approval instantly!
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Guest / Visitor Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Ramesh Patil / My Brother"
+                    value={newVisName}
+                    onChange={(e) => setNewVisName(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Purpose of Entry</label>
+                  <select
+                    value={newVisPurpose}
+                    onChange={(e) => setNewVisPurpose(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="Guest">Guest / Relative</option>
+                    <option value="Delivery">Delivery Executive</option>
+                    <option value="Services">Home Maid / Services</option>
+                    <option value="Maintenance">Maintenance Contractor</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Contact Phone No (Optional)</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 9876543210"
+                    value={newVisContact}
+                    onChange={(e) => setNewVisContact(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-sans"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Expected Vehicle No (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MH-12-ZZ-9999"
+                    value={newVisVehicle}
+                    onChange={(e) => setNewVisVehicle(e.target.value)}
+                    className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-colors"
+                >
+                  ✨ Issue Gate Pre-Approval Pass
+                </button>
+              </form>
+            </div>
+          )}
+
           {/* Broadcast Notice Modal Popup */}
           {isBroadcastModalOpen && (
             <div className="absolute inset-0 bg-white z-50 flex flex-col text-xs">
@@ -2591,13 +4436,19 @@ export default function MobileSimulator({
                     onAddNotice({
                       title: newNoticeTitle,
                       category: newNoticeCategory,
-                      content: newNoticeContent
+                      content: newNoticeContent,
+                      attachmentUrl: newNoticeFileUrl,
+                      attachmentName: newNoticeFileName,
+                      attachmentSize: newNoticeFileSize
                     });
                     triggerToast('Notice broadcast successfully!');
                     setIsBroadcastModalOpen(false);
                     setNewNoticeTitle('');
                     setNewNoticeContent('');
                     setNewNoticeCategory('General');
+                    setNewNoticeFileName('');
+                    setNewNoticeFileUrl('');
+                    setNewNoticeFileSize('');
                   } else {
                     triggerToast('Notice service unavailable');
                   }
@@ -2633,12 +4484,104 @@ export default function MobileSimulator({
                   <label className="font-bold text-slate-600 block">Announcement Content</label>
                   <textarea
                     required
-                    rows={8}
+                    rows={6}
                     placeholder="Provide the detailed notice, schedules, notes, or instructions for the society residents..."
                     value={newNoticeContent}
                     onChange={(e) => setNewNoticeContent(e.target.value)}
                     className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 resize-none font-medium leading-relaxed"
                   />
+                </div>
+
+                {/* Simulated Attachment Dropzone */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="font-bold text-slate-600 block flex items-center justify-between">
+                    <span>Circular Attachment (Optional)</span>
+                    {newNoticeFileName && (
+                      <span className="text-[9px] text-green-600 font-extrabold uppercase">✔ File Attached</span>
+                    )}
+                  </label>
+
+                  {newNoticeFileName ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-[9px] shrink-0">
+                          {newNoticeFileName.split('.').pop()?.toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-extrabold text-slate-800 text-[10px] truncate">{newNoticeFileName}</p>
+                          <p className="text-[9px] text-slate-400 font-semibold">{newNoticeFileSize}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewNoticeFileName('');
+                          setNewNoticeFileUrl('');
+                          setNewNoticeFileSize('');
+                        }}
+                        className="text-slate-400 hover:text-rose-600 p-1 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Remove attachment"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div 
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          // Simulating drop file
+                          setNewNoticeFileName('Uploaded_Circular_Notice.pdf');
+                          setNewNoticeFileSize('1.2 MB');
+                          setNewNoticeFileUrl('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
+                          triggerToast('Document "Uploaded_Circular_Notice.pdf" successfully attached!');
+                        }}
+                        className="border border-dashed border-slate-300 hover:border-purple-400 hover:bg-purple-50/10 rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1 bg-slate-50"
+                        onClick={() => {
+                          // Allow choosing from templates
+                          setNewNoticeFileName('AGM_Meeting_Agenda_Circular.pdf');
+                          setNewNoticeFileSize('820 KB');
+                          setNewNoticeFileUrl('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
+                          triggerToast('Document "AGM_Meeting_Agenda_Circular.pdf" successfully attached!');
+                        }}
+                      >
+                        <Megaphone className="w-6 h-6 text-slate-400 shrink-0" />
+                        <p className="font-bold text-slate-600 text-[10px]">Drag & drop circular document, or click to browse</p>
+                        <p className="text-[8px] text-slate-400 font-semibold">Supports PDF, DOCX, JPG (Max 5MB)</p>
+                      </div>
+
+                      {/* Standard Template Quick Select */}
+                      <div className="flex flex-col gap-1.5 p-2.5 bg-slate-100 rounded-xl border border-slate-200">
+                        <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Or attach official templates:</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {[
+                            { name: 'Water_Billing_Revision.pdf', size: '1.4 MB' },
+                            { name: 'AGM_Notice_Agenda.pdf', size: '920 KB' },
+                            { name: 'Monsoon_Safety_Circular.pdf', size: '1.1 MB' },
+                            { name: 'Rules_and_Regulations.docx', size: '680 KB' }
+                          ].map((tmpl, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setNewNoticeFileName(tmpl.name);
+                                setNewNoticeFileSize(tmpl.size);
+                                setNewNoticeFileUrl('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
+                                triggerToast(`Attached "${tmpl.name}" template!`);
+                              }}
+                              className="bg-white hover:bg-purple-50 border border-slate-200 hover:border-purple-300 rounded-lg p-1.5 text-left text-[9px] font-bold text-slate-700 truncate cursor-pointer transition-all flex items-center gap-1.5 shadow-3xs"
+                            >
+                              <div className="w-4 h-4 rounded bg-slate-150 text-slate-500 flex items-center justify-center font-black text-[7px] shrink-0">
+                                {tmpl.name.split('.').pop()?.toUpperCase()}
+                              </div>
+                              <span className="truncate">{tmpl.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="pt-2 flex gap-2">
@@ -2718,35 +4661,60 @@ export default function MobileSimulator({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-600 block">Wing Subdivisions</label>
-                  <div className="flex gap-2">
+                  <label className="font-bold text-slate-600 block">Structural Topology (Real-Time Layout)</label>
+                  <div className="grid grid-cols-3 gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setTempHasWings(false)}
-                      className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
-                        !tempHasWings
+                      onClick={() => {
+                        setTempStructureType('standalone');
+                        setTempHasWings(false);
+                      }}
+                      className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                        tempStructureType === 'standalone'
                           ? 'bg-purple-100 border-purple-400 text-purple-700'
                           : 'bg-white border-slate-200 text-slate-500'
                       }`}
                     >
-                      Single Block
+                      🏢 Standalone
                     </button>
                     <button
                       type="button"
-                      onClick={() => setTempHasWings(true)}
-                      className={`flex-1 py-2 rounded-lg border text-center font-bold transition-all ${
-                        tempHasWings
+                      onClick={() => {
+                        setTempStructureType('wings');
+                        setTempHasWings(true);
+                      }}
+                      className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                        tempStructureType === 'wings'
                           ? 'bg-purple-100 border-purple-400 text-purple-700'
                           : 'bg-white border-slate-200 text-slate-500'
                       }`}
                     >
-                      Has Wings (A, B, C)
+                      🧱 Winged Block
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempStructureType('towers_wings');
+                        setTempHasWings(true);
+                        if (tempTowers.length === 0) {
+                          setTempTowers([
+                            { Name: 'Tower 1', Wings: ['A', 'B'] },
+                            { Name: 'Tower 2', Wings: ['C', 'D'] }
+                          ]);
+                        }
+                      }}
+                      className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                        tempStructureType === 'towers_wings'
+                          ? 'bg-purple-100 border-purple-400 text-purple-700'
+                          : 'bg-white border-slate-200 text-slate-500'
+                      }`}
+                    >
+                      🏰 Towers & Wings
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Enable wings if your society is divided into multiple independent blocks or wings.</p>
                 </div>
 
-                {tempHasWings && (
+                {tempStructureType === 'wings' && (
                   <div className="space-y-1.5 animate-fadeIn">
                     <label className="font-bold text-slate-600 block">Define Wing Names</label>
                     <input
@@ -2757,6 +4725,69 @@ export default function MobileSimulator({
                       className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-slate-800"
                     />
                     <p className="text-[9px] text-slate-400">Separate wings using commas (e.g., A, B, C or Wing A, Wing B).</p>
+                  </div>
+                )}
+
+                {tempStructureType === 'towers_wings' && (
+                  <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl animate-fadeIn">
+                    <div className="flex justify-between items-center border-b pb-1.5 border-slate-200">
+                      <span className="font-extrabold text-slate-700 text-[10px] uppercase tracking-wider flex items-center gap-1">🏢 Towers & Wings Setup</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextNum = tempTowers.length + 1;
+                          setTempTowers([...tempTowers, { Name: `Tower ${nextNum}`, Wings: ['A', 'B'] }]);
+                        }}
+                        className="text-[9px] bg-purple-600 hover:bg-purple-700 text-white font-black px-2 py-1 rounded cursor-pointer transition-all"
+                      >
+                        ➕ Add Tower
+                      </button>
+                    </div>
+
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                      {tempTowers.map((tower, idx) => (
+                        <div key={idx} className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-3xs space-y-1.5 relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTempTowers(tempTowers.filter((_, tIdx) => tIdx !== idx));
+                            }}
+                            className="absolute top-1.5 right-2 text-rose-500 hover:text-rose-700 font-bold text-sm"
+                          >
+                            ✕
+                          </button>
+                          
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-500 text-[9px] shrink-0">Tower Name:</span>
+                            <input
+                              type="text"
+                              value={tower.Name}
+                              onChange={(e) => {
+                                const updated = [...tempTowers];
+                                updated[idx].Name = e.target.value;
+                                setTempTowers(updated);
+                              }}
+                              className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 text-[10px]"
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-slate-500 text-[9px] shrink-0">Wings in Tower:</span>
+                            <input
+                              type="text"
+                              value={tower.Wings.join(', ')}
+                              onChange={(e) => {
+                                const updated = [...tempTowers];
+                                updated[idx].Wings = e.target.value.split(',').map(w => w.trim()).filter(w => w !== '');
+                                setTempTowers(updated);
+                              }}
+                              placeholder="e.g. A, B"
+                              className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 text-[10px] flex-1"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -2781,42 +4812,79 @@ export default function MobileSimulator({
               </div>
 
               <form onSubmit={handleSaveMember} className="flex-1 p-4 space-y-3 overflow-y-auto">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="font-semibold text-slate-600 block">Flat/Unit No.</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 101, 302"
-                      value={memFlatNo}
-                      onChange={(e) => setMemFlatNo(e.target.value)}
-                      disabled={isEditingMember}
-                      className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:text-slate-500 font-bold"
-                    />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-slate-600 block text-xs">Flat/Unit No.</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 101, 302"
+                        value={memFlatNo}
+                        onChange={(e) => setMemFlatNo(e.target.value)}
+                        disabled={isEditingMember}
+                        className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:bg-slate-100 disabled:text-slate-500 font-bold"
+                      />
+                    </div>
+
+                    {activeStructureType === 'towers_wings' ? (
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-600 block text-xs">Tower</label>
+                        <select
+                          value={memTower}
+                          onChange={(e) => {
+                            const newTow = e.target.value;
+                            setMemTower(newTow);
+                            const tObj = activeTowers.find(t => t.Name === newTow);
+                            if (tObj && tObj.Wings.length > 0) {
+                              setMemWing(tObj.Wings[0]);
+                            }
+                          }}
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-bold"
+                        >
+                          {activeTowers.map(tower => (
+                            <option key={tower.Name} value={tower.Name}>{tower.Name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : activeStructureType === 'wings' ? (
+                      <div className="space-y-1">
+                        <label className="font-semibold text-slate-600 block text-xs">Wing Block</label>
+                        <select
+                          value={memWing}
+                          onChange={(e) => setMemWing(e.target.value)}
+                          className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
+                        >
+                          {wingsList.map(wing => (
+                            <option key={wing} value={wing}>Wing {wing}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 opacity-50">
+                        <label className="font-semibold text-slate-600 block text-xs">Wing/Tower</label>
+                        <input
+                          type="text"
+                          disabled
+                          placeholder="Standalone (No Subdivisions)"
+                          className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg cursor-not-allowed text-xs text-slate-400"
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  {hasWings ? (
-                    <div className="space-y-1">
-                      <label className="font-semibold text-slate-600 block">Wing Block</label>
+                  {activeStructureType === 'towers_wings' && (
+                    <div className="space-y-1 animate-fadeIn">
+                      <label className="font-semibold text-slate-600 block text-xs">Wing in {memTower}</label>
                       <select
                         value={memWing}
                         onChange={(e) => setMemWing(e.target.value)}
                         className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium"
                       >
-                        {wingsList.map(wing => (
+                        {(activeTowers.find(t => t.Name === memTower)?.Wings || []).map(wing => (
                           <option key={wing} value={wing}>Wing {wing}</option>
                         ))}
                       </select>
-                    </div>
-                  ) : (
-                    <div className="space-y-1 opacity-50">
-                      <label className="font-semibold text-slate-600 block">Wing Block</label>
-                      <input
-                        type="text"
-                        disabled
-                        placeholder="Wings Disabled"
-                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg cursor-not-allowed"
-                      />
                     </div>
                   )}
                 </div>

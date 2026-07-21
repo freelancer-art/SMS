@@ -1,4 +1,4 @@
-import { Member, Payment, Expense, Complaint, Notice } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply } from '../types';
 
 export const INITIAL_MEMBERS: Member[] = [
   {
@@ -460,6 +460,20 @@ export const MULTI_TENANT_MEMBERS: Member[] = [
   // Greenwood members (mapped with societyId: 'greenwood')
   ...INITIAL_MEMBERS.map(m => ({ ...m, SocietyId: 'greenwood', id: m.id || `M-greenwood-${m.FlatNo}` })),
   
+  // Amit Sharma owns a second flat in Greenwood: Flat 303
+  {
+    id: "M-greenwood-303",
+    SocietyId: "greenwood",
+    FlatNo: "303",
+    OwnerName: "Amit Sharma",
+    ContactNo: "+91 98765 43210",
+    Email: "amit.sharma@example.com",
+    Balance: 4500,
+    Status: "Owner",
+    CoOwners: "Sunita Sharma",
+    VehicleNo: "MH-02-AB-1234"
+  },
+  
   // Royal Heights members
   {
     id: "M-royal-T1-101",
@@ -540,6 +554,19 @@ export const MULTI_TENANT_MEMBERS: Member[] = [
     Status: "Owner",
     CoOwners: "None",
     VehicleNo: "MH-02-ZC-8888"
+  },
+  {
+    id: "M-seabreeze-B-301",
+    SocietyId: "sea_breeze",
+    FlatNo: "301",
+    Wing: "Wing B",
+    OwnerName: "Amit Sharma",
+    ContactNo: "+91 98765 43210",
+    Email: "amit.sharma@example.com",
+    Balance: 1500,
+    Status: "Owner",
+    CoOwners: "Sunita Sharma",
+    VehicleNo: "MH-02-AB-1234"
   }
 ];
 
@@ -682,3 +709,237 @@ export const MULTI_TENANT_NOTICES: Notice[] = [
     PostedBy: "Entertainment Committee"
   }
 ];
+
+export const MULTI_TENANT_INVOICES: Invoice[] = [
+  // Greenwood Residency Invoices
+  {
+    id: "INV-greenwood-0",
+    SocietyId: "greenwood",
+    BillMonth: "July 2026",
+    FlatNo: "101",
+    OwnerName: "Amit Sharma",
+    BaseAmount: 2000,
+    WaterCharges: 300,
+    SecurityCharges: 200,
+    ParkingCharges: 100,
+    TotalAmount: 2600,
+    DueDate: "2026-07-31",
+    Status: "Unpaid",
+    IssuedDate: "2026-07-01"
+  },
+  {
+    id: "INV-greenwood-1",
+    SocietyId: "greenwood",
+    BillMonth: "June 2026",
+    FlatNo: "101",
+    OwnerName: "Amit Sharma",
+    BaseAmount: 2000,
+    WaterCharges: 300,
+    SecurityCharges: 200,
+    ParkingCharges: 100,
+    TotalAmount: 2600,
+    DueDate: "2026-06-30",
+    Status: "Paid",
+    IssuedDate: "2026-06-01"
+  },
+  {
+    id: "INV-greenwood-2",
+    SocietyId: "greenwood",
+    BillMonth: "July 2026",
+    FlatNo: "102",
+    OwnerName: "Priya Patel",
+    BaseAmount: 2000,
+    WaterCharges: 300,
+    SecurityCharges: 200,
+    ParkingCharges: 0,
+    TotalAmount: 2500,
+    DueDate: "2026-07-31",
+    Status: "Paid",
+    IssuedDate: "2026-07-01"
+  },
+  // Sea Breeze Invoices
+  {
+    id: "INV-seabreeze-0",
+    SocietyId: "sea_breeze",
+    BillMonth: "July 2026",
+    FlatNo: "301",
+    OwnerName: "Amit Sharma",
+    BaseAmount: 3000,
+    WaterCharges: 400,
+    SecurityCharges: 300,
+    ParkingCharges: 150,
+    TotalAmount: 3850,
+    DueDate: "2026-07-31",
+    Status: "Unpaid",
+    IssuedDate: "2026-07-01"
+  }
+];
+
+export const MULTI_TENANT_VISITORS: Visitor[] = [
+  // Greenwood Residency Visitors
+  {
+    id: "VIS-greenwood-0",
+    SocietyId: "greenwood",
+    FlatNo: "101",
+    VisitorName: "Rajesh (Zomato)",
+    Purpose: "Delivery",
+    ContactNo: "+91 98888 12345",
+    VehicleNo: "MH-02-ZZ-9988",
+    CheckInTime: "2026-07-21T01:10:00",
+    Status: "Pending Approval"
+  },
+  {
+    id: "VIS-greenwood-1",
+    SocietyId: "greenwood",
+    FlatNo: "102",
+    VisitorName: "Sanjay Kumar (Plumber)",
+    Purpose: "Maintenance",
+    ContactNo: "+91 97777 54321",
+    CheckInTime: "2026-07-20T11:15:00",
+    CheckOutTime: "2026-07-20T12:30:00",
+    Status: "Checked Out",
+    HostApprovedBy: "Priya Patel"
+  },
+  {
+    id: "VIS-greenwood-2",
+    SocietyId: "greenwood",
+    FlatNo: "101",
+    VisitorName: "Anil Sharma (Brother)",
+    Purpose: "Guest",
+    ContactNo: "+91 96666 98765",
+    VehicleNo: "DL-01-AB-5678",
+    CheckInTime: "2026-07-21T00:15:00",
+    Status: "Pre-Approved"
+  }
+];
+
+export const MULTI_TENANT_COMPLAINT_REPLIES: ComplaintReply[] = [
+  {
+    id: "REP-greenwood-0",
+    ComplaintId: "C-greenwood-0",
+    SocietyId: "greenwood",
+    SenderName: "Amit Sharma (Secretary)",
+    SenderRole: "Admin",
+    Message: "Plumber has been requested. He will visit your flat to inspect tomorrow morning.",
+    Timestamp: "2026-07-19T10:30:00"
+  },
+  {
+    id: "REP-greenwood-1",
+    ComplaintId: "C-greenwood-0",
+    SocietyId: "greenwood",
+    SenderName: "Karan Johar (Resident)",
+    SenderRole: "Member",
+    Message: "Thanks, please make sure he inspects the leakage source in 302 as well.",
+    Timestamp: "2026-07-19T11:15:00"
+  }
+];
+
+// Secure roles and credentials for multi-tenant simulation
+export interface RoleMock {
+  id: string;
+  RoleName: 'SuperAdmin' | 'Admin' | 'Committee Member' | 'Member';
+  SocietyId?: string;
+  Description?: string;
+}
+
+export interface UserAuthMock {
+  id: string;
+  EmailOrPhone: string;
+  PasswordHash: string;
+  Salt: string;
+  RoleId: string;
+  SocietyId?: string;
+  Status: 'Active' | 'Suspended';
+}
+
+export const MULTI_TENANT_ROLES: RoleMock[] = [
+  // SuperAdmin Role (Global)
+  {
+    id: "Role-SuperAdmin",
+    RoleName: "SuperAdmin",
+    Description: "Global Super-Admin overseeing all societies and launching new ones"
+  },
+  // Greenwood Roles
+  {
+    id: "Role-greenwood-admin",
+    RoleName: "Admin",
+    SocietyId: "greenwood",
+    Description: "Primary Admin Secretary for Greenwood Residency"
+  },
+  {
+    id: "Role-greenwood-committee",
+    RoleName: "Committee Member",
+    SocietyId: "greenwood",
+    Description: "Elected Committee Member for Greenwood Residency"
+  },
+  {
+    id: "Role-greenwood-member",
+    RoleName: "Member",
+    SocietyId: "greenwood",
+    Description: "Standard Flat Owner or Tenant"
+  },
+  // Royal Heights Roles
+  {
+    id: "Role-royal-admin",
+    RoleName: "Admin",
+    SocietyId: "royal_heights",
+    Description: "Primary Admin Secretary for Royal Heights"
+  },
+  {
+    id: "Role-royal-committee",
+    RoleName: "Committee Member",
+    SocietyId: "royal_heights",
+    Description: "Elected Committee Member for Royal Heights"
+  },
+  {
+    id: "Role-royal-member",
+    RoleName: "Member",
+    SocietyId: "royal_heights",
+    Description: "Standard Resident in Royal Heights"
+  }
+];
+
+// Default UserAuth entries.
+// We will populate PasswordHash at runtime dynamically in App.tsx if needed, or define standard secure hashes
+export const MULTI_TENANT_USER_AUTHS: UserAuthMock[] = [
+  // Super-Admin
+  {
+    id: "Auth-Super-Admin",
+    EmailOrPhone: "superadmin@societyconnect.com",
+    PasswordHash: "C6F2A5623B689793", // will mix with salt
+    Salt: "SALT-SUPER-ADMIN",
+    RoleId: "Role-SuperAdmin",
+    Status: "Active"
+  },
+  // Greenwood Primary Admin: Amit Sharma
+  {
+    id: "Auth-gw-amit-sharma",
+    EmailOrPhone: "amit080578@gmail.com",
+    PasswordHash: "", // will compute dynamically
+    Salt: "SALT-GW-AMIT",
+    RoleId: "Role-greenwood-admin",
+    SocietyId: "greenwood",
+    Status: "Active"
+  },
+  {
+    id: "Auth-gw-amit-sharma-alt",
+    EmailOrPhone: "amit.sharma@example.com",
+    PasswordHash: "", // will compute dynamically
+    Salt: "SALT-GW-AMIT-ALT",
+    RoleId: "Role-greenwood-admin",
+    SocietyId: "greenwood",
+    Status: "Active"
+  },
+  // Royal Heights Primary Admin: Royal Secretary
+  {
+    id: "Auth-royal-sec",
+    EmailOrPhone: "admin@royalheights.com",
+    PasswordHash: "", // will compute dynamically
+    Salt: "SALT-ROYAL-SEC",
+    RoleId: "Role-royal-admin",
+    SocietyId: "royal_heights",
+    Status: "Active"
+  }
+];
+
+

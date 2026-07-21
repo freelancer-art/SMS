@@ -39,8 +39,24 @@ A highly polished, modern, and production-ready digital operations platform desi
 * **Grievance Resolution**: Residents can file maintenance, security, or billing issues directly from the app.
 * **Admin Controls**: Society Admins can transition complaint statuses (Open ➔ In Progress ➔ Resolved) with automatic audit trailing.
 
-#### 📣 Notice Board Bulletin
+#### 📣 Notice Board Bulletin & Document Center
 * **Dynamic Broadcasting**: Admins can publish urgent updates (e.g., Water Shutdowns, Annual General Meetings) with priority tags (Event, Maintenance, Security, General).
+* **Committee-Only Document Attachments**: Notice drafting and document uploads are restricted to Committee Members (Admin role). Includes an interactive drag-and-drop simulated attachment interface supporting PDF, DOCX, and JPG circular uploads.
+* **Immersive Circular Viewer**: Residents can preview official notice documents within an immersive, high-fidelity modal. Features include responsive document zoom, digital letterhead generation, official society seals, and electronic signatures.
+
+#### 🏠 Multi-Unit Ownership Swapper
+* **Single-Owner Multi-Flat Handling**: Detects when a resident owns more than one flat within the same society (mapped by registered email or contact details).
+* **Real-time Context Switching**: Adds a dynamic flat-swapper widget inside the resident's mobile dashboard. Selecting a different flat instantly updates the entire active dashboard context (maintenance balances, invoice records, pre-approved visitor gate logs, and logged complaints) on the fly.
+
+#### 📅 Shared Facility Booking Calendar
+* **Amenity Booking Hub**: Interactive scheduling dashboard for common amenities like the **Clubhouse**, **Party Hall**, and **Tennis Court**.
+* **Automatic Ledger Integration**: Booking premium slots automatically computes rates and posts the reservation cost straight to the resident unit's balance sheet/outstanding dues ledger.
+* **Conflict Resolution**: Smart scheduling engine prevents overlapping time-slot reservations for the same facility.
+
+#### 🛡️ OTP-Based Verification & Multi-Factor Simulation
+* **Secure Session MFA**: Secure Resident Sign-In includes an optional Multi-Factor toggle to simulate enterprise-grade security.
+* **Interactive SMS Push Notifications**: Simulates SMS delivery by triggering animated, full-fidelity message banners at the top of the mobile device containing randomized 4-digit verification codes.
+* **Live Audit Terminal Logs**: Integrated real-time security log terminal inside the sign-in modal displaying full transaction logs, status updates (Success, Failure, Resent), and security telemetry.
 
 ---
 

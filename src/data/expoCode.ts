@@ -2999,7 +2999,7 @@ export const SUPABASE_SQL_SCHEMA = `-- Greenwood Society Connect: Supabase SQL D
 -- Since we modified the table schemas (e.g., adding "id", "SocietyId" and moving away from FlatNo as primary key), 
 -- you must DROP the old tables in Supabase first to let the new schema take effect. 
 -- Copy and run the uncommented line below in your Supabase SQL Editor if you are upgrading:
--- DROP TABLE IF EXISTS "AuditLogs", "Settings", "Notices", "Complaints", "Expenses", "Payments", "Members", "Societies" CASCADE;
+-- DROP TABLE IF EXISTS "Invoices", "Visitors", "ComplaintReplies", "AuditLogs", "Settings", "Notices", "Complaints", "Expenses", "Payments", "Members", "Societies" CASCADE;
 
 -- 0. Create Societies Table
 CREATE TABLE IF NOT EXISTS "Societies" (
@@ -3076,7 +3076,9 @@ CREATE TABLE IF NOT EXISTS "Notices" (
   "Category" TEXT,
   "Content" TEXT NOT NULL,
   "AttachmentUrl" TEXT,
-  "PostedBy" TEXT
+  "PostedBy" TEXT,
+  "DocumentUrl" TEXT,
+  "UploadedBy" TEXT
 );
 
 -- 6. Create Settings Table
@@ -3097,6 +3099,70 @@ CREATE TABLE IF NOT EXISTS "AuditLogs" (
   "Details" TEXT
 );
 
+-- 8. Create Invoices Table
+CREATE TABLE IF NOT EXISTS "Invoices" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "BillMonth" TEXT NOT NULL,
+  "FlatNo" TEXT NOT NULL,
+  "OwnerName" TEXT NOT NULL,
+  "BaseAmount" NUMERIC DEFAULT 0,
+  "WaterCharges" NUMERIC DEFAULT 0,
+  "SecurityCharges" NUMERIC DEFAULT 0,
+  "ParkingCharges" NUMERIC DEFAULT 0,
+  "TotalAmount" NUMERIC DEFAULT 0,
+  "DueDate" TEXT NOT NULL,
+  "Status" TEXT DEFAULT 'Unpaid',
+  "IssuedDate" TEXT NOT NULL
+);
+
+-- 9. Create Visitors Table
+CREATE TABLE IF NOT EXISTS "Visitors" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "FlatNo" TEXT NOT NULL,
+  "VisitorName" TEXT NOT NULL,
+  "Purpose" TEXT NOT NULL,
+  "ContactNo" TEXT,
+  "VehicleNo" TEXT,
+  "CheckInTime" TEXT NOT NULL,
+  "CheckOutTime" TEXT,
+  "Status" TEXT DEFAULT 'Pending Approval',
+  "HostApprovedBy" TEXT,
+  "AccessToken" TEXT,
+  "TokenExpiresAt" TEXT
+);
+
+-- 10. Create ComplaintReplies Table
+CREATE TABLE IF NOT EXISTS "ComplaintReplies" (
+  "id" TEXT PRIMARY KEY,
+  "ComplaintId" TEXT NOT NULL,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SenderName" TEXT NOT NULL,
+  "SenderRole" TEXT DEFAULT 'Member',
+  "Message" TEXT NOT NULL,
+  "Timestamp" TEXT NOT NULL
+);
+
+-- 11. Create Roles Table
+CREATE TABLE IF NOT EXISTS "Roles" (
+  "id" TEXT PRIMARY KEY,
+  "RoleName" TEXT NOT NULL,
+  "SocietyId" TEXT,
+  "Description" TEXT
+);
+
+-- 12. Create UserAuth Table
+CREATE TABLE IF NOT EXISTS "UserAuth" (
+  "id" TEXT PRIMARY KEY,
+  "EmailOrPhone" TEXT NOT NULL UNIQUE,
+  "PasswordHash" TEXT NOT NULL,
+  "Salt" TEXT NOT NULL,
+  "RoleId" TEXT NOT NULL,
+  "SocietyId" TEXT,
+  "Status" TEXT DEFAULT 'Active'
+);
+
 -- Enable Row Level Security (RLS) policies
 ALTER TABLE "Societies" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Members" ENABLE ROW LEVEL SECURITY;
@@ -3106,10 +3172,24 @@ ALTER TABLE "Complaints" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Notices" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Settings" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AuditLogs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Invoices" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Visitors" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ComplaintReplies" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Roles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "UserAuth" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read on Societies" ON "Societies" FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on Societies" ON "Societies" FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public delete on Societies" ON "Societies" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on Roles" ON "Roles" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on Roles" ON "Roles" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public delete on Roles" ON "Roles" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on UserAuth" ON "UserAuth" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on UserAuth" ON "UserAuth" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on UserAuth" ON "UserAuth" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on UserAuth" ON "UserAuth" FOR DELETE USING (true);
 
 CREATE POLICY "Allow public read on Members" ON "Members" FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on Members" ON "Members" FOR INSERT WITH CHECK (true);
@@ -3141,6 +3221,20 @@ CREATE POLICY "Allow public delete on Settings" ON "Settings" FOR DELETE USING (
 CREATE POLICY "Allow public read on AuditLogs" ON "AuditLogs" FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on AuditLogs" ON "AuditLogs" FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public delete on AuditLogs" ON "AuditLogs" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on Invoices" ON "Invoices" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on Invoices" ON "Invoices" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on Invoices" ON "Invoices" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on Invoices" ON "Invoices" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on Visitors" ON "Visitors" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on Visitors" ON "Visitors" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on Visitors" ON "Visitors" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on Visitors" ON "Visitors" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on ComplaintReplies" ON "ComplaintReplies" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on ComplaintReplies" ON "ComplaintReplies" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public delete on ComplaintReplies" ON "ComplaintReplies" FOR DELETE USING (true);
 
 -- Insert Default Settings rows
 INSERT INTO "Settings" ("Key", "Value") VALUES

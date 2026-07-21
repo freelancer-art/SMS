@@ -11,16 +11,23 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog } from './types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth } from './types';
 import { 
   MULTI_TENANT_MEMBERS, 
   MULTI_TENANT_PAYMENTS, 
   MULTI_TENANT_EXPENSES, 
   MULTI_TENANT_COMPLAINTS, 
-  MULTI_TENANT_NOTICES 
+  MULTI_TENANT_NOTICES,
+  MULTI_TENANT_INVOICES,
+  MULTI_TENANT_VISITORS,
+  MULTI_TENANT_COMPLAINT_REPLIES,
+  MULTI_TENANT_ROLES,
+  MULTI_TENANT_USER_AUTHS
 } from './data/mockData';
+import { hashPassword, generateSalt, generateVisitorAccessToken } from './utils/security';
 import MobileSimulator from './components/MobileSimulator';
 import ExpoDeveloperHub from './components/ExpoDeveloperHub';
+import OnboardingWizard from './components/OnboardingWizard';
 
 const DEFAULT_SOCIETIES: Society[] = [
   {
@@ -28,16 +35,22 @@ const DEFAULT_SOCIETIES: Society[] = [
     Name: 'Greenwood Residency',
     BuildingType: 'Housing Society',
     PostalAddress: '123 Greenwood Road, Sector 5, Mumbai, MH - 400001',
-    Wings: ['A', 'B', 'C'],
-    HasWings: true
+    Wings: [],
+    HasWings: false,
+    StructureType: 'standalone'
   },
   {
     id: 'royal_heights',
     Name: 'Royal Heights Complex',
     BuildingType: 'Apartment Complex',
     PostalAddress: 'Plot 45-47, Palm Beach Road, Sanpada, Navi Mumbai, MH - 400705',
-    Wings: ['Tower 1', 'Tower 2'],
-    HasWings: true
+    Wings: ['Tower 1 - Wing A', 'Tower 1 - Wing B', 'Tower 2 - Wing A', 'Tower 2 - Wing B'],
+    HasWings: true,
+    StructureType: 'towers_wings',
+    Towers: [
+      { id: 't1', Name: 'Tower 1', Wings: ['Wing A', 'Wing B'] },
+      { id: 't2', Name: 'Tower 2', Wings: ['Wing A', 'Wing B'] }
+    ]
   },
   {
     id: 'sea_breeze',
@@ -45,7 +58,8 @@ const DEFAULT_SOCIETIES: Society[] = [
     BuildingType: 'Residential Co-operative',
     PostalAddress: 'Beach Road, Juhu, Mumbai, MH - 400049',
     Wings: ['Wing A', 'Wing B'],
-    HasWings: true
+    HasWings: true,
+    StructureType: 'wings'
   }
 ];
 
@@ -113,6 +127,7 @@ export default function App() {
 
   // Super-Admin Society Register States
   const [showRegisterSociety, setShowRegisterSociety] = useState(false);
+  const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
   const [newSocName, setNewSocName] = useState('');
   const [newSocType, setNewSocType] = useState('Housing Society');
   const [newSocAddress, setNewSocAddress] = useState('');
@@ -134,6 +149,11 @@ export default function App() {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [complaintReplies, setComplaintReplies] = useState<ComplaintReply[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [userAuths, setUserAuths] = useState<UserAuth[]>([]);
   const [lastSynced, setLastSynced] = useState<string>(() => localStorage.getItem('society_last_synced') || '');
 
   // Init Data from LocalStorage or Fallbacks
@@ -144,6 +164,9 @@ export default function App() {
     const localComplaints = localStorage.getItem('society_complaints');
     const localNotices = localStorage.getItem('society_notices');
     const localAuditLogs = localStorage.getItem('society_audit_logs');
+    const localInvoices = localStorage.getItem('society_invoices');
+    const localVisitors = localStorage.getItem('society_visitors');
+    const localReplies = localStorage.getItem('society_complaint_replies');
     const savedUrl = localStorage.getItem('society_supabase_url') || 'https://czirnbiybxydsdzbimyw.supabase.co';
     const savedKey = localStorage.getItem('society_supabase_anon_key') || '';
 
@@ -158,12 +181,83 @@ export default function App() {
       }
     };
 
-    setMembers(getSafeList(localMembers, MULTI_TENANT_MEMBERS));
+    const localSocs = localStorage.getItem('society_list_all');
+    const parsedSocs = getSafeList(localSocs, DEFAULT_SOCIETIES);
+    let updatedSocs = [...parsedSocs];
+    let socsUpdated = false;
+
+    const hasOnboarded = localStorage.getItem('society_onboarded_v2') !== null;
+    if (!hasOnboarded && (!localSocs || JSON.parse(localSocs || '[]').length === 0)) {
+      setShowOnboardingWizard(true);
+    }
+
+    // Ensure Greenwood Residency has HasWings: false, Wings: []
+    updatedSocs = updatedSocs.map(s => {
+      if (s.id === 'greenwood' && (s.HasWings || s.Wings.length > 0)) {
+        socsUpdated = true;
+        return { ...s, HasWings: false, Wings: [] };
+      }
+      return s;
+    });
+
+    // Ensure default societies exist
+    DEFAULT_SOCIETIES.forEach(ds => {
+      const exists = updatedSocs.some(s => s.id === ds.id);
+      if (!exists) {
+        updatedSocs.push(ds);
+        socsUpdated = true;
+      }
+    });
+
+    if (socsUpdated) {
+      localStorage.setItem('society_list_all', JSON.stringify(updatedSocs));
+    }
+    setSocieties(updatedSocs);
+
+    const initialMembers = getSafeList(localMembers, MULTI_TENANT_MEMBERS);
+    let updatedMembers = [...initialMembers];
+    let membersUpdated = false;
+    MULTI_TENANT_MEMBERS.forEach(mockM => {
+      const exists = updatedMembers.some(m => m.SocietyId === mockM.SocietyId && m.FlatNo === mockM.FlatNo);
+      if (!exists) {
+        updatedMembers.push(mockM);
+        membersUpdated = true;
+      }
+    });
+    if (membersUpdated) {
+      localStorage.setItem('society_members', JSON.stringify(updatedMembers));
+    }
+
+    setMembers(updatedMembers);
     setPayments(getSafeList(localPayments, MULTI_TENANT_PAYMENTS));
     setExpenses(getSafeList(localExpenses, MULTI_TENANT_EXPENSES));
     setComplaints(getSafeList(localComplaints, MULTI_TENANT_COMPLAINTS));
     setNotices(getSafeList(localNotices, MULTI_TENANT_NOTICES));
     setAuditLogs(getSafeList(localAuditLogs, DEFAULT_AUDIT_LOGS));
+    setInvoices(getSafeList(localInvoices, MULTI_TENANT_INVOICES));
+    setVisitors(getSafeList(localVisitors, MULTI_TENANT_VISITORS));
+    setComplaintReplies(getSafeList(localReplies, MULTI_TENANT_COMPLAINT_REPLIES));
+
+    // Initialize Roles and UserAuth tables in LocalStorage / State
+    const localRoles = localStorage.getItem('society_roles');
+    const localUserAuths = localStorage.getItem('society_user_auths');
+    
+    const parsedRoles = getSafeList(localRoles, MULTI_TENANT_ROLES);
+    let parsedAuths = getSafeList(localUserAuths, MULTI_TENANT_USER_AUTHS);
+
+    // Compute PasswordHash dynamically for default mock passwords if empty
+    parsedAuths = parsedAuths.map((auth: any) => {
+      if (!auth.PasswordHash) {
+        const plainPass = auth.EmailOrPhone === 'superadmin@societyconnect.com' ? 'superadmin' : 'admin123';
+        auth.PasswordHash = hashPassword(plainPass, auth.Salt);
+      }
+      return auth;
+    });
+
+    setRoles(parsedRoles);
+    setUserAuths(parsedAuths);
+    localStorage.setItem('society_roles', JSON.stringify(parsedRoles));
+    localStorage.setItem('society_user_auths', JSON.stringify(parsedAuths));
 
     if (savedUrl && savedKey) {
       setSupabaseUrl(savedUrl);
@@ -191,6 +285,31 @@ export default function App() {
   const updateComplaintsState = (newComplaints: Complaint[]) => {
     setComplaints(newComplaints);
     localStorage.setItem('society_complaints', JSON.stringify(newComplaints));
+  };
+
+  const updateInvoicesState = (newInvoices: Invoice[]) => {
+    setInvoices(newInvoices);
+    localStorage.setItem('society_invoices', JSON.stringify(newInvoices));
+  };
+
+  const updateVisitorsState = (newVisitors: Visitor[]) => {
+    setVisitors(newVisitors);
+    localStorage.setItem('society_visitors', JSON.stringify(newVisitors));
+  };
+
+  const updateComplaintRepliesState = (newReplies: ComplaintReply[]) => {
+    setComplaintReplies(newReplies);
+    localStorage.setItem('society_complaint_replies', JSON.stringify(newReplies));
+  };
+
+  const updateRolesState = (newRoles: Role[]) => {
+    setRoles(newRoles);
+    localStorage.setItem('society_roles', JSON.stringify(newRoles));
+  };
+
+  const updateUserAuthsState = (newUserAuths: UserAuth[]) => {
+    setUserAuths(newUserAuths);
+    localStorage.setItem('society_user_auths', JSON.stringify(newUserAuths));
   };
 
   // Connect & Save Supabase Credentials
@@ -288,6 +407,26 @@ export default function App() {
       await clearAndInsert('Expenses', MULTI_TENANT_EXPENSES, 'id');
       await clearAndInsert('Complaints', MULTI_TENANT_COMPLAINTS, 'id');
       await clearAndInsert('Notices', MULTI_TENANT_NOTICES, 'id');
+      await clearAndInsert('Invoices', MULTI_TENANT_INVOICES, 'id');
+      await clearAndInsert('Visitors', MULTI_TENANT_VISITORS, 'id');
+      await clearAndInsert('ComplaintReplies', MULTI_TENANT_COMPLAINT_REPLIES, 'id');
+
+      // Seed Roles and UserAuth tables
+      await clearAndInsert('Roles', MULTI_TENANT_ROLES, 'id');
+      const formattedAuths = MULTI_TENANT_USER_AUTHS.map(auth => {
+        const plain = auth.EmailOrPhone === 'superadmin@societyconnect.com' ? 'superadmin' : 'admin123';
+        const hash = auth.PasswordHash || hashPassword(plain, auth.Salt);
+        return {
+          id: auth.id,
+          EmailOrPhone: auth.EmailOrPhone,
+          PasswordHash: hash,
+          Salt: auth.Salt,
+          RoleId: auth.RoleId,
+          SocietyId: auth.SocietyId || null,
+          Status: auth.Status
+        };
+      });
+      await clearAndInsert('UserAuth', formattedAuths, 'id');
 
       // Seed settings (for backwards compatibility)
       const settingsRows = [
@@ -360,14 +499,33 @@ export default function App() {
       // 0. Fetch Societies
       const societiesData = await safeFetchJson('Societies');
       if (Array.isArray(societiesData) && societiesData.length > 0) {
-        const formattedSocs: Society[] = societiesData.map(s => ({
+        let formattedSocs: Society[] = societiesData.map(s => ({
           id: String(s.id),
           Name: s.Name || 'Unnamed Society',
           BuildingType: s.BuildingType || 'Housing Society',
           PostalAddress: s.PostalAddress || '',
-          Wings: s.Wings ? String(s.Wings).split(',').map((w: string) => w.trim()).filter((w: string) => w !== '') : [],
-          HasWings: s.HasWings === true || s.HasWings === 'true'
+          Wings: s.Wings ? (Array.isArray(s.Wings) ? s.Wings : String(s.Wings).split(',').map((w: string) => w.trim()).filter((w: string) => w !== '')) : [],
+          HasWings: s.HasWings === true || s.HasWings === 'true',
+          StructureType: s.StructureType || (s.HasWings ? 'wings' : 'standalone'),
+          Towers: s.Towers ? (typeof s.Towers === 'string' ? JSON.parse(s.Towers) : s.Towers) : undefined
         }));
+
+        // Always force Greenwood to be wing-less
+        formattedSocs = formattedSocs.map(s => {
+          if (s.id === 'greenwood') {
+            return { ...s, HasWings: false, Wings: [], StructureType: 'standalone' };
+          }
+          return s;
+        });
+
+        // Merge any default societies that might be missing in the fetched results
+        DEFAULT_SOCIETIES.forEach(ds => {
+          const exists = formattedSocs.some(s => s.id === ds.id);
+          if (!exists) {
+            formattedSocs.push(ds);
+          }
+        });
+
         setSocieties(formattedSocs);
         localStorage.setItem('society_list_all', JSON.stringify(formattedSocs));
       }
@@ -390,7 +548,17 @@ export default function App() {
             VehicleNo: m.VehicleNo || '',
             Wing: m.Wing || ''
           }));
-        updateMembersState(formatted);
+
+        // Merge default multi-tenant members if they are missing in the database list
+        const mergedMembers = [...formatted];
+        MULTI_TENANT_MEMBERS.forEach(mockM => {
+          const exists = mergedMembers.some(m => m.SocietyId === mockM.SocietyId && m.FlatNo === mockM.FlatNo);
+          if (!exists) {
+            mergedMembers.push(mockM);
+          }
+        });
+
+        updateMembersState(mergedMembers);
       }
 
       // 2. Fetch Payments
@@ -487,6 +655,94 @@ export default function App() {
           })).sort((a,b) => b.Timestamp.localeCompare(a.Timestamp));
         setAuditLogs(formatted);
         localStorage.setItem('society_audit_logs', JSON.stringify(formatted));
+      }
+
+      // 7. Fetch Invoices
+      const invoicesData = await safeFetchJson('Invoices');
+      if (Array.isArray(invoicesData)) {
+        const formatted: Invoice[] = invoicesData
+          .filter(i => i && i.id)
+          .map(i => ({
+            id: String(i.id),
+            SocietyId: i.SocietyId || 'greenwood',
+            BillMonth: i.BillMonth || '',
+            FlatNo: String(i.FlatNo || ''),
+            OwnerName: i.OwnerName || '',
+            BaseAmount: parseFloat(String(i.BaseAmount || 0)) || 0,
+            WaterCharges: parseFloat(String(i.WaterCharges || 0)) || 0,
+            SecurityCharges: parseFloat(String(i.SecurityCharges || 0)) || 0,
+            ParkingCharges: parseFloat(String(i.ParkingCharges || 0)) || 0,
+            TotalAmount: parseFloat(String(i.TotalAmount || 0)) || 0,
+            DueDate: i.DueDate || '',
+            Status: (i.Status === 'Paid' ? 'Paid' : 'Unpaid') as 'Paid' | 'Unpaid',
+            IssuedDate: i.IssuedDate || ''
+          })).sort((a,b) => b.IssuedDate.localeCompare(a.IssuedDate));
+        updateInvoicesState(formatted);
+      }
+
+      // 8. Fetch Visitors
+      const visitorsData = await safeFetchJson('Visitors');
+      if (Array.isArray(visitorsData)) {
+        const formatted: Visitor[] = visitorsData
+          .filter(v => v && v.id)
+          .map(v => ({
+            id: String(v.id),
+            SocietyId: v.SocietyId || 'greenwood',
+            FlatNo: String(v.FlatNo || ''),
+            VisitorName: v.VisitorName || '',
+            Purpose: v.Purpose || 'Delivery',
+            ContactNo: v.ContactNo || '',
+            VehicleNo: v.VehicleNo || '',
+            CheckInTime: v.CheckInTime || '',
+            CheckOutTime: v.CheckOutTime || undefined,
+            Status: v.Status || 'Pending Approval',
+            HostApprovedBy: v.HostApprovedBy || undefined
+          })).sort((a,b) => b.CheckInTime.localeCompare(a.CheckInTime));
+        updateVisitorsState(formatted);
+      }
+
+      // 9. Fetch ComplaintReplies
+      const complaintRepliesData = await safeFetchJson('ComplaintReplies');
+      if (Array.isArray(complaintRepliesData)) {
+        const formatted: ComplaintReply[] = complaintRepliesData
+          .filter(r => r && r.id)
+          .map(r => ({
+            id: String(r.id),
+            ComplaintId: r.ComplaintId || '',
+            SocietyId: r.SocietyId || 'greenwood',
+            SenderName: r.SenderName || '',
+            SenderRole: (r.SenderRole === 'Admin' ? 'Admin' : 'Member') as 'Admin' | 'Member',
+            Message: r.Message || '',
+            Timestamp: r.Timestamp || ''
+          })).sort((a,b) => a.Timestamp.localeCompare(b.Timestamp));
+        updateComplaintRepliesState(formatted);
+      }
+
+      // 10. Fetch Roles
+      const rolesData = await safeFetchJson('Roles');
+      if (Array.isArray(rolesData) && rolesData.length > 0) {
+        const formatted: Role[] = rolesData.map(r => ({
+          id: String(r.id),
+          RoleName: r.RoleName as any,
+          SocietyId: r.SocietyId || undefined,
+          Description: r.Description || ''
+        }));
+        updateRolesState(formatted);
+      }
+
+      // 11. Fetch UserAuth
+      const userAuthData = await safeFetchJson('UserAuth');
+      if (Array.isArray(userAuthData) && userAuthData.length > 0) {
+        const formatted: UserAuth[] = userAuthData.map(ua => ({
+          id: String(ua.id),
+          EmailOrPhone: String(ua.EmailOrPhone),
+          PasswordHash: String(ua.PasswordHash),
+          Salt: String(ua.Salt),
+          RoleId: String(ua.RoleId),
+          SocietyId: ua.SocietyId || undefined,
+          Status: ua.Status as any || 'Active'
+        }));
+        updateUserAuthsState(formatted);
       }
 
       const timeString = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -749,7 +1005,15 @@ export default function App() {
     }
   };
 
-  const handleUpdateSocietySettings = async (name: string, wingsEnabled: boolean, wings: string[], address: string, type: string) => {
+  const handleUpdateSocietySettings = async (
+    name: string, 
+    wingsEnabled: boolean, 
+    wings: string[], 
+    address: string, 
+    type: string,
+    structureType?: 'standalone' | 'wings' | 'towers_wings',
+    towers?: any[]
+  ) => {
     const updatedSocieties = societies.map(s => {
       if (s.id === activeSocietyId) {
         return {
@@ -758,7 +1022,9 @@ export default function App() {
           HasWings: wingsEnabled,
           Wings: wings,
           PostalAddress: address,
-          BuildingType: type
+          BuildingType: type,
+          StructureType: structureType || (wingsEnabled ? 'wings' : 'standalone'),
+          Towers: towers
         };
       }
       return s;
@@ -777,7 +1043,9 @@ export default function App() {
           HasWings: wingsEnabled,
           Wings: wings.join(', '),
           PostalAddress: address,
-          BuildingType: type
+          BuildingType: type,
+          StructureType: structureType || (wingsEnabled ? 'wings' : 'standalone'),
+          Towers: towers ? JSON.stringify(towers) : null
         };
 
         const res = await fetch(`${supabaseUrl}/rest/v1/Societies?id=eq.${activeSocietyId}`, {
@@ -812,6 +1080,16 @@ export default function App() {
         console.error('Failed to post settings update to Supabase:', err);
       }
     }
+  };
+
+  const handleAddDues = (flatNo: string, amount: number, desc: string) => {
+    const updated = members.map(m => {
+      if (m.SocietyId === activeSocietyId && m.FlatNo === flatNo) {
+        return { ...m, Balance: m.Balance + amount };
+      }
+      return m;
+    });
+    updateMembersState(updated);
   };
 
   const handleSaveOrUpdateMember = async (updatedMember: Member) => {
@@ -872,7 +1150,14 @@ export default function App() {
     }
   };
 
-  const handleAddNotice = async (noticeData: { title: string; category: string; content: string }) => {
+  const handleAddNotice = async (noticeData: { 
+    title: string; 
+    category: string; 
+    content: string; 
+    attachmentUrl?: string; 
+    attachmentName?: string; 
+    attachmentSize?: string;
+  }) => {
     const noticeId = `N-${Date.now()}`;
     const newNotice: Notice = {
       id: noticeId,
@@ -881,7 +1166,10 @@ export default function App() {
       Title: noticeData.title,
       Category: noticeData.category as any,
       Content: noticeData.content,
-      PostedBy: 'Society Management'
+      AttachmentUrl: noticeData.attachmentUrl || "",
+      AttachmentName: noticeData.attachmentName || "",
+      AttachmentSize: noticeData.attachmentSize || "",
+      PostedBy: 'Society Management Committee'
     };
     const nextNotices = [newNotice, ...notices];
     setNotices(nextNotices);
@@ -996,15 +1284,285 @@ export default function App() {
     }
   };
 
+  const handleOnboardingComplete = (newSociety: Society, initialMembers: Member[], adminEmail: string, adminFlat: string) => {
+    // 1. Add new society
+    const updatedSocieties = [...societies, newSociety];
+    setSocieties(updatedSocieties);
+    localStorage.setItem('society_list_all', JSON.stringify(updatedSocieties));
+
+    // 2. Create isolated secure roles for the new society
+    const adminRoleId = `Role-${newSociety.id}-admin`;
+    const committeeRoleId = `Role-${newSociety.id}-committee`;
+    const memberRoleId = `Role-${newSociety.id}-member`;
+
+    const newRoles: Role[] = [
+      {
+        id: adminRoleId,
+        RoleName: 'Admin',
+        SocietyId: newSociety.id,
+        Description: `Primary Admin Secretary for ${newSociety.Name}`
+      },
+      {
+        id: committeeRoleId,
+        RoleName: 'Committee Member',
+        SocietyId: newSociety.id,
+        Description: `Elected Committee Member for ${newSociety.Name}`
+      },
+      {
+        id: memberRoleId,
+        RoleName: 'Member',
+        SocietyId: newSociety.id,
+        Description: `Resident in ${newSociety.Name}`
+      }
+    ];
+
+    const updatedRoles = [...roles, ...newRoles];
+    updateRolesState(updatedRoles);
+
+    // 3. Generate secure hashed credential auth for the assigned Admin
+    const adminSalt = generateSalt();
+    const adminHash = hashPassword('admin123', adminSalt); // Default secure initial password: admin123
+    
+    const newAdminAuth: UserAuth = {
+      id: `Auth-${newSociety.id}-admin`,
+      EmailOrPhone: adminEmail.trim().toLowerCase(),
+      PasswordHash: adminHash,
+      Salt: adminSalt,
+      RoleId: adminRoleId,
+      SocietyId: newSociety.id,
+      Status: 'Active'
+    };
+
+    const updatedUserAuths = [...userAuths, newAdminAuth];
+    updateUserAuthsState(updatedUserAuths);
+
+    // 4. Add initial members generated by the wizard
+    const updatedMembers = [...members, ...initialMembers];
+    updateMembersState(updatedMembers);
+
+    // 5. Mark onboarded
+    localStorage.setItem('society_onboarded_v2', 'true');
+    localStorage.setItem('active_society_id', newSociety.id);
+    setActiveSocietyId(newSociety.id);
+
+    // 6. Set active login to this admin email inside the simulator
+    localStorage.setItem('society_sim_logged_email', adminEmail.trim().toLowerCase());
+    localStorage.setItem('society_sim_logged_email_or_phone', adminEmail.trim().toLowerCase());
+
+    // 7. Setup first invoice and welcome notice
+    const starterNotice: Notice = {
+      id: `N-${newSociety.id}-welcome`,
+      SocietyId: newSociety.id,
+      Date: new Date().toISOString().split('T')[0],
+      Title: `Welcome to ${newSociety.Name}!`,
+      Category: "General",
+      Content: `Welcome to the digital portal of ${newSociety.Name}. Explore our interactive notices, file grievance discussions, make secure dues payments, and pre-approve visitors.`,
+      PostedBy: "Managing Committee",
+      DocumentUrl: "",
+      UploadedBy: "System"
+    };
+    const updatedNotices = [starterNotice, ...notices];
+    setNotices(updatedNotices);
+    localStorage.setItem('society_notices', JSON.stringify(updatedNotices));
+
+    setShowOnboardingWizard(false);
+  };
+
+  // 1. Add Invoice Handler (Automated Invoicing Engine)
+  const handleAddInvoice = async (newInv: Omit<Invoice, 'id'>) => {
+    const invId = `INV-${Date.now()}`;
+    const loggedInvoice: Invoice = {
+      ...newInv,
+      id: invId
+    };
+
+    const nextInvoices = [loggedInvoice, ...invoices];
+    updateInvoicesState(nextInvoices);
+
+    // Update member's balance in state
+    const nextMembers = members.map(m => {
+      if (m.FlatNo === newInv.FlatNo && m.SocietyId === newInv.SocietyId) {
+        return { ...m, Balance: m.Balance + newInv.TotalAmount };
+      }
+      return m;
+    });
+    updateMembersState(nextMembers);
+
+    // Log action
+    handleAddAuditLog('Issue Invoice', `Issued maintenance invoice of ₹${newInv.TotalAmount} for Flat ${newInv.FlatNo} (${newInv.BillMonth})`);
+
+    // Sync to Supabase
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Invoices`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(loggedInvoice)
+        });
+
+        // Also update member's balance in Supabase
+        const targetMember = members.find(m => m.FlatNo === newInv.FlatNo && m.SocietyId === newInv.SocietyId);
+        if (targetMember) {
+          const queryParam = targetMember.id ? `id=eq.${targetMember.id}` : `FlatNo=eq.${targetMember.FlatNo}&SocietyId=eq.${newInv.SocietyId}`;
+          await fetch(`${supabaseUrl}/rest/v1/Members?${queryParam}`, {
+            method: 'PATCH',
+            headers: {
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              Balance: targetMember.Balance + newInv.TotalAmount
+            })
+          });
+        }
+      } catch (err) {
+        console.error('Failed to sync new invoice to Supabase:', err);
+      }
+    }
+  };
+
+  // 2. Add Visitor Handler (Gatekeeper Simulator)
+  const handleAddVisitor = async (newVis: Omit<Visitor, 'id'>) => {
+    const visId = `VIS-${Date.now()}`;
+    const loggedVisitor: Visitor = {
+      ...newVis,
+      id: visId
+    };
+
+    const nextVisitors = [loggedVisitor, ...visitors];
+    updateVisitorsState(nextVisitors);
+
+    // Log action
+    handleAddAuditLog('Gate Check-In', `Checked in visitor ${newVis.VisitorName} for Flat ${newVis.FlatNo} (${newVis.Purpose})`);
+
+    // Sync to Supabase
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Visitors`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(loggedVisitor)
+        });
+      } catch (err) {
+        console.error('Failed to sync new visitor to Supabase:', err);
+      }
+    }
+  };
+
+  // 3. Update Visitor Status Handler (Gatekeeper approval/checkout)
+  const handleUpdateVisitorStatus = async (visitorId: string, status: Visitor['Status'], hostApprovedBy?: string) => {
+    const nextVisitors = visitors.map(v => {
+      if (v.id === visitorId) {
+        const updateObj: Partial<Visitor> = { Status: status };
+        if (status === 'Checked Out') {
+          updateObj.CheckOutTime = new Date().toISOString();
+        }
+        if (hostApprovedBy) {
+          updateObj.HostApprovedBy = hostApprovedBy;
+        }
+        return { ...v, ...updateObj };
+      }
+      return v;
+    });
+    updateVisitorsState(nextVisitors);
+
+    const targetVis = visitors.find(v => v.id === visitorId);
+    const visName = targetVis ? targetVis.VisitorName : 'Visitor';
+    const flatNo = targetVis ? targetVis.FlatNo : '';
+
+    // Log action
+    handleAddAuditLog('Visitor Status Update', `Updated visitor ${visName} (Flat ${flatNo}) status to ${status}${hostApprovedBy ? ' approved by ' + hostApprovedBy : ''}`);
+
+    // Sync to Supabase
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        const updatePayload: any = { Status: status };
+        if (status === 'Checked Out') {
+          updatePayload.CheckOutTime = new Date().toISOString();
+        }
+        if (hostApprovedBy) {
+          updatePayload.HostApprovedBy = hostApprovedBy;
+        }
+
+        await fetch(`${supabaseUrl}/rest/v1/Visitors?id=eq.${visitorId}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updatePayload)
+        });
+      } catch (err) {
+        console.error('Failed to update visitor status in Supabase:', err);
+      }
+    }
+  };
+
+  // 4. Add Complaint Reply Handler (Interactive Discussion Threads)
+  const handleAddComplaintReply = async (newReply: Omit<ComplaintReply, 'id'>) => {
+    const replyId = `REP-${Date.now()}`;
+    const loggedReply: ComplaintReply = {
+      ...newReply,
+      id: replyId
+    };
+
+    const nextReplies = [...complaintReplies, loggedReply];
+    updateComplaintRepliesState(nextReplies);
+
+    // Log action
+    handleAddAuditLog('Complaint Message', `Posted reply on complaint thread ${newReply.ComplaintId}`);
+
+    // Sync to Supabase
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/ComplaintReplies`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(loggedReply)
+        });
+      } catch (err) {
+        console.error('Failed to post complaint reply to Supabase:', err);
+      }
+    }
+  };
+
   // Filter datasets dynamically by active society
   const filteredMembers = members.filter(m => m.SocietyId === activeSocietyId);
   const filteredPayments = payments.filter(p => p.SocietyId === activeSocietyId);
   const filteredExpenses = expenses.filter(e => e.SocietyId === activeSocietyId);
   const filteredComplaints = complaints.filter(c => c.SocietyId === activeSocietyId);
   const filteredNotices = notices.filter(n => n.SocietyId === activeSocietyId);
+  const filteredInvoices = invoices.filter(i => i.SocietyId === activeSocietyId);
+  const filteredVisitors = visitors.filter(v => v.SocietyId === activeSocietyId);
+  const filteredComplaintReplies = complaintReplies.filter(r => r.SocietyId === activeSocietyId);
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans overflow-hidden transition-colors duration-300`}>
+      {/* Immersive Onboarding Setup Wizard Overlay */}
+      {showOnboardingWizard && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <OnboardingWizard 
+            onComplete={handleOnboardingComplete} 
+            onCancel={() => setShowOnboardingWizard(false)} 
+            theme={theme}
+          />
+        </div>
+      )}
+
       {/* Top Navbar - hidden on mobile viewports */}
       <header className={`hidden lg:flex ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-xs'} border-b px-6 py-4 justify-between items-center z-10 flex-shrink-0 transition-colors duration-300`}>
         <div className="flex items-center gap-3">
@@ -1067,16 +1625,28 @@ export default function App() {
 
           <MobileSimulator
             members={filteredMembers}
+            allMembers={members}
             payments={filteredPayments}
             expenses={filteredExpenses}
             complaints={filteredComplaints}
             notices={filteredNotices}
+            invoices={filteredInvoices}
+            visitors={filteredVisitors}
+            complaintReplies={filteredComplaintReplies}
             auditLogs={auditLogs.filter(al => al.SocietyId === activeSocietyId)}
+            roles={roles}
+            userAuths={userAuths}
+            onUpdateRoles={updateRolesState}
+            onUpdateUserAuths={updateUserAuthsState}
             onAddPayment={handleAddPayment}
             onAddExpense={handleAddExpense}
             onAddComplaint={handleAddComplaint}
             onUpdateComplaint={handleUpdateComplaintStatus}
             onAddNotice={handleAddNotice}
+            onAddInvoice={handleAddInvoice}
+            onAddVisitor={handleAddVisitor}
+            onUpdateVisitor={handleUpdateVisitorStatus}
+            onAddComplaintReply={handleAddComplaintReply}
             onRefresh={async () => syncWithSupabase()}
             scriptUrl={supabaseAnonKey ? 'Connected' : ''}
             societyName={societyName}
@@ -1086,6 +1656,8 @@ export default function App() {
             buildingType={buildingType}
             onUpdateSocietySettings={handleUpdateSocietySettings}
             onSaveOrUpdateMember={handleSaveOrUpdateMember}
+            onAddDues={handleAddDues}
+            onAddAuditLog={handleAddAuditLog}
             lastSynced={lastSynced}
             societies={societies}
             activeSocietyId={activeSocietyId}
@@ -1099,6 +1671,55 @@ export default function App() {
             <div className={`flex items-center justify-between font-bold ${theme === 'dark' ? 'text-slate-400 border-slate-800/60' : 'text-slate-700 border-slate-200'} border-b pb-1.5 mb-1 select-none`}>
               <span>🛠️ Developer Control Panel</span>
               <span className="text-[10px] text-purple-400 uppercase tracking-wider bg-purple-950/40 border border-purple-900/30 px-1.5 py-0.5 rounded">Active Societies</span>
+            </div>
+
+            {/* Interactive Fixes & Implementations Tracker */}
+            <div className={`p-3 rounded-xl border ${
+              theme === 'dark' ? 'bg-slate-900/50 border-purple-900/40' : 'bg-purple-50/40 border-purple-100 shadow-3xs'
+            } space-y-2 mb-2`}>
+              <div className="flex justify-between items-center border-b pb-1.5 border-purple-100/20">
+                <span className="text-[10px] font-black text-purple-700 uppercase tracking-wider">
+                  📋 Fixes & Features Tracker
+                </span>
+                <span className="text-[8px] bg-green-500 text-white font-black px-1.5 py-0.5 rounded uppercase shrink-0 leading-none">
+                  All 3 Fixes Live
+                </span>
+              </div>
+              
+              <div className="space-y-2">
+                {/* Issue 1 */}
+                <div className="flex items-start gap-2 text-[10px]">
+                  <span className="text-green-500 font-bold shrink-0 mt-0.5">✅</span>
+                  <div>
+                    <strong className={`${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} block`}>1. Multi-Property Switching (Amit Sharma)</strong>
+                    <span className="text-slate-500 block mt-0.5 leading-tight">
+                      When logging in as Amit Sharma (email: <code>amit.sharma@example.com</code>, passcode: <code>1234</code>), a "My Registered Properties" section displays on the resident dashboard. Tap to switch active properties dynamically between Greenwood (Flat 101) and Sea Breeze (Flat 301).
+                    </span>
+                  </div>
+                </div>
+
+                {/* Issue 2 */}
+                <div className="flex items-start gap-2 text-[10px] border-t pt-2 border-purple-100/10">
+                  <span className="text-green-500 font-bold shrink-0 mt-0.5">✅</span>
+                  <div>
+                    <strong className={`${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} block`}>2. Greenwood Wing-less Configuration</strong>
+                    <span className="text-slate-500 block mt-0.5 leading-tight">
+                      Force-overrode Greenwood Residency to <code>HasWings: false</code> and empty <code>Wings: []</code>. This completely removes the "Blocks: A, B, C" display from the app, database loading, and sync pipelines.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Issue 3 */}
+                <div className="flex items-start gap-2 text-[10px] border-t pt-2 border-purple-100/10">
+                  <span className="text-green-500 font-bold shrink-0 mt-0.5">✅</span>
+                  <div>
+                    <strong className={`${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'} block`}>3. Logout Field Sanitation</strong>
+                    <span className="text-slate-500 block mt-0.5 leading-tight">
+                      Wipes all credentials (username, passcode, admin password) completely from memory and local storage inputs upon tapping "Sign Out" or "Log Out".
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
             
             <div className="space-y-1">
@@ -1117,13 +1738,22 @@ export default function App() {
             </div>
 
             {!showRegisterSociety ? (
-              <button
-                type="button"
-                onClick={() => setShowRegisterSociety(true)}
-                className="mt-1.5 w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-1.5 rounded text-[10px] shadow transition-all flex items-center justify-center gap-1 cursor-pointer"
-              >
-                <span>➕ Register New Customer (Society)</span>
-              </button>
+              <div className="space-y-1 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowOnboardingWizard(true)}
+                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-black py-2 rounded text-[10px] shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>✨ Launch Interactive Setup Wizard</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRegisterSociety(true)}
+                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1.5 rounded text-[10px] border border-slate-200 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>➕ Register Society (Basic Form)</span>
+                </button>
+              </div>
             ) : (
               <form
                 onSubmit={(e) => {
@@ -1233,9 +1863,9 @@ export default function App() {
             )}
 
             <div className={`flex justify-between items-center text-[10px] ${theme === 'dark' ? 'text-slate-500 border-slate-800/40' : 'text-slate-400 border-slate-200'} border-t pt-2 select-none`}>
-              <span>Gate Passcode: <strong className={theme === 'dark' ? 'text-slate-400 font-mono' : 'text-slate-600 font-mono'}>admin123</strong></span>
+              <span>Default Passcode: <strong className={theme === 'dark' ? 'text-slate-400 font-mono' : 'text-slate-600 font-mono'}>admin123</strong> <span className="italic opacity-85">(Resetable in App)</span></span>
               <span>•</span>
-              <span>Pull to refresh / load notices</span>
+              <span>Use 🔄 in App Header to Sync</span>
             </div>
           </div>
         </div>
