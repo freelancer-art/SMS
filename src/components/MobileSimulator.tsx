@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FileUpload } from './FileUpload';
 import { 
   Users, 
   CreditCard, 
@@ -37,7 +38,24 @@ import {
   Send,
   ShieldCheck,
   Home,
-  Calendar
+  Calendar,
+  PhoneCall,
+  FileText,
+  Eye,
+  Check,
+  Trash2,
+  ShieldAlert,
+  KeyRound,
+  ParkingSquare,
+  Wrench,
+  Droplets,
+  Download,
+  EyeOff,
+  FolderKanban,
+  Printer,
+  BellRing,
+  AlertOctagon,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -52,7 +70,7 @@ import {
   Cell,
   Legend
 } from 'recharts';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags } from '../types';
 import { hashPassword, generateSalt, generateVisitorAccessToken } from '../utils/security';
 import FacilityBookingManager from './FacilityBookingManager';
 
@@ -66,6 +84,13 @@ interface MobileSimulatorProps {
   invoices?: Invoice[];
   visitors?: Visitor[];
   complaintReplies?: ComplaintReply[];
+  emergencyContacts?: EmergencyContact[];
+  tenants?: Tenant[];
+  vehicles?: Vehicle[];
+  guestParkings?: GuestParking[];
+  societyDocuments?: SocietyDocument[];
+  assetAMCs?: AssetAMC[];
+  waterMeters?: WaterMeter[];
   auditLogs?: AuditLog[];
   roles?: Role[];
   userAuths?: UserAuth[];
@@ -89,7 +114,8 @@ interface MobileSimulatorProps {
     postalAddress: string, 
     buildingType: string,
     structureType?: 'standalone' | 'wings' | 'towers_wings',
-    towers?: any[]
+    towers?: any[],
+    features?: FeatureFlags
   ) => void;
   onSaveOrUpdateMember: (member: Member) => void;
   onAddNotice?: (notice: { 
@@ -106,6 +132,23 @@ interface MobileSimulatorProps {
   onAddVisitor?: (visitor: Omit<Visitor, 'id'>) => void;
   onUpdateVisitor?: (id: string, status: Visitor['Status'], hostApprovedBy?: string) => void;
   onAddComplaintReply?: (reply: Omit<ComplaintReply, 'id'>) => void;
+  onAddEmergencyContact?: (contact: Omit<EmergencyContact, 'id'>) => void;
+  onUpdateEmergencyContact?: (id: string, contact: Partial<EmergencyContact>) => void;
+  onDeleteEmergencyContact?: (id: string) => void;
+  onAddTenant?: (tenant: Omit<Tenant, 'id'>) => void;
+  onUpdateTenantKyc?: (id: string, kycStatus: 'Pending' | 'Verified' | 'Rejected', remarks?: string) => void;
+  onAddVehicle?: (vehicle: Omit<Vehicle, 'id'>) => void;
+  onDeleteVehicle?: (id: string) => void;
+  onAddGuestParking?: (parking: Omit<GuestParking, 'id'>) => void;
+  onUpdateGuestParkingStatus?: (id: string, status: 'Active' | 'Expired' | 'Completed') => void;
+  onAddSocietyDocument?: (doc: Omit<SocietyDocument, 'id'>) => void;
+  onDeleteSocietyDocument?: (id: string) => void;
+  onToggleDocumentVisibility?: (id: string, isPublic: boolean) => void;
+  onAddAssetAMC?: (amc: Omit<AssetAMC, 'id'>) => void;
+  onUpdateAssetAMC?: (id: string, amc: Partial<AssetAMC>) => void;
+  onDeleteAssetAMC?: (id: string) => void;
+  onAddWaterMeter?: (reading: Omit<WaterMeter, 'id'>) => void;
+  onBatchAddWaterMeters?: (readings: Omit<WaterMeter, 'id'>[]) => void;
   lastSynced?: string;
   societies?: Society[];
   activeSocietyId?: string;
@@ -113,6 +156,7 @@ interface MobileSimulatorProps {
   onCreateSociety?: (name: string, type: string, address: string, wings: string[], wingsEnabled: boolean) => void;
   onAddDues?: (flatNo: string, amount: number, desc: string) => void;
   onAddAuditLog?: (action: string, details: string) => void;
+  theme?: 'light' | 'dark';
 }
 
 export default function MobileSimulator({
@@ -125,6 +169,13 @@ export default function MobileSimulator({
   invoices: rawInvoices = [],
   visitors: rawVisitors = [],
   complaintReplies: rawComplaintReplies = [],
+  emergencyContacts: rawEmergencyContacts = [],
+  tenants: rawTenants = [],
+  vehicles: rawVehicles = [],
+  guestParkings: rawGuestParkings = [],
+  societyDocuments: rawSocietyDocuments = [],
+  assetAMCs: rawAssetAMCs = [],
+  waterMeters: rawWaterMeters = [],
   auditLogs = [],
   roles: rawRoles = [],
   userAuths: rawUserAuths = [],
@@ -148,14 +199,86 @@ export default function MobileSimulator({
   onAddVisitor,
   onUpdateVisitor,
   onAddComplaintReply,
+  onAddEmergencyContact,
+  onUpdateEmergencyContact,
+  onDeleteEmergencyContact,
+  onAddTenant,
+  onUpdateTenantKyc,
+  onAddVehicle,
+  onDeleteVehicle,
+  onAddGuestParking,
+  onUpdateGuestParkingStatus,
+  onAddSocietyDocument,
+  onDeleteSocietyDocument,
+  onToggleDocumentVisibility,
+  onAddAssetAMC,
+  onUpdateAssetAMC,
+  onDeleteAssetAMC,
+  onAddWaterMeter,
+  onBatchAddWaterMeters,
   lastSynced,
   societies = [],
   activeSocietyId = 'greenwood',
   onChangeActiveSociety,
   onCreateSociety,
   onAddDues,
-  onAddAuditLog
+  onAddAuditLog,
+  theme = 'dark'
 }: MobileSimulatorProps) {
+  const isDark = theme === 'dark';
+
+  // Dynamic Theme UI helper classes
+  const cardBgClass = isDark
+    ? 'bg-slate-900/90 border-slate-800 text-slate-100 shadow-sm'
+    : 'bg-white border-slate-150 text-slate-800 shadow-xs';
+
+  const subCardBgClass = isDark
+    ? 'bg-slate-950/70 border-slate-800/80 text-slate-200'
+    : 'bg-slate-50 border-slate-100 text-slate-800';
+
+  const modalBgClass = isDark
+    ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-2xl'
+    : 'bg-white border-slate-200 text-slate-900 shadow-xl';
+
+  const inputClass = isDark
+    ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-purple-500 font-sans'
+    : 'bg-white border-slate-300 text-slate-800 placeholder-slate-400 focus:border-purple-500 font-sans';
+
+  const secondaryBtnClass = isDark
+    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold transition-colors cursor-pointer'
+    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-bold transition-colors cursor-pointer';
+
+  const softPurpleBtnClass = isDark
+    ? 'bg-purple-950/80 hover:bg-purple-900/90 text-purple-300 border border-purple-800/60 font-bold transition-colors cursor-pointer'
+    : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-100 font-bold transition-colors cursor-pointer';
+
+  const getThemeBadge = (color: 'emerald' | 'amber' | 'rose' | 'purple' | 'indigo' | 'cyan' | 'blue' | 'teal' | 'slate') => {
+    if (isDark) {
+      switch (color) {
+        case 'emerald': return 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-black';
+        case 'amber': return 'bg-amber-950/80 text-amber-300 border border-amber-800/60 font-black';
+        case 'rose': return 'bg-rose-950/80 text-rose-300 border border-rose-800/60 font-black';
+        case 'purple': return 'bg-purple-950/80 text-purple-300 border border-purple-800/60 font-black';
+        case 'indigo': return 'bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-black';
+        case 'cyan': return 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-black';
+        case 'blue': return 'bg-blue-950/80 text-blue-300 border border-blue-800/60 font-black';
+        case 'teal': return 'bg-teal-950/80 text-teal-300 border border-teal-800/60 font-black';
+        case 'slate': default: return 'bg-slate-800 text-slate-300 border border-slate-700 font-bold';
+      }
+    } else {
+      switch (color) {
+        case 'emerald': return 'bg-emerald-100 text-emerald-800 border border-emerald-200 font-black';
+        case 'amber': return 'bg-amber-100 text-amber-800 border border-amber-200 font-black';
+        case 'rose': return 'bg-rose-100 text-rose-800 border border-rose-200 font-black';
+        case 'purple': return 'bg-purple-100 text-purple-800 border border-purple-200 font-black';
+        case 'indigo': return 'bg-indigo-100 text-indigo-800 border border-indigo-200 font-black';
+        case 'cyan': return 'bg-cyan-100 text-cyan-800 border border-cyan-200 font-black';
+        case 'blue': return 'bg-blue-100 text-blue-800 border border-blue-200 font-black';
+        case 'teal': return 'bg-teal-100 text-teal-800 border border-teal-200 font-black';
+        case 'slate': default: return 'bg-slate-100 text-slate-700 border border-slate-200 font-bold';
+      }
+    }
+  };
   const members = Array.isArray(rawMembers) ? rawMembers : [];
   const allMembers = Array.isArray(rawAllMembers) ? rawAllMembers : [];
   const payments = Array.isArray(rawPayments) ? rawPayments : [];
@@ -167,6 +290,13 @@ export default function MobileSimulator({
   const roles = Array.isArray(rawRoles) ? rawRoles : [];
   const userAuths = Array.isArray(rawUserAuths) ? rawUserAuths : [];
   const complaintReplies = Array.isArray(rawComplaintReplies) ? rawComplaintReplies : [];
+  const emergencyContacts = Array.isArray(rawEmergencyContacts) ? rawEmergencyContacts : [];
+  const tenants = Array.isArray(rawTenants) ? rawTenants : [];
+  const vehicles = Array.isArray(rawVehicles) ? rawVehicles : [];
+  const guestParkings = Array.isArray(rawGuestParkings) ? rawGuestParkings : [];
+  const societyDocuments = Array.isArray(rawSocietyDocuments) ? rawSocietyDocuments : [];
+  const assetAMCs = Array.isArray(rawAssetAMCs) ? rawAssetAMCs : [];
+  const waterMeters = Array.isArray(rawWaterMeters) ? rawWaterMeters : [];
   
   // Login & RBAC State
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -223,6 +353,15 @@ export default function MobileSimulator({
   const activeSocietyObj = societies?.find(s => s.id === activeSocietyId);
   const activeStructureType = activeSocietyObj?.StructureType || (hasWings ? 'wings' : 'standalone');
   const activeTowers = activeSocietyObj?.Towers || [];
+  const activeFeatures: FeatureFlags = activeSocietyObj?.FeaturesEnabled || {
+    gatekeeper: true,
+    waterMeters: false,
+    tenantRegister: true,
+    amenities: true,
+    assetAMC: false,
+    parkingRegister: true,
+    documentVault: true
+  };
 
   const handleZoomChange = (scale: number) => {
     setZoomScale(scale);
@@ -281,11 +420,213 @@ export default function MobileSimulator({
   }, [smsBanner]);
 
   // Tab State
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'members' | 'payments' | 'expenses' | 'complaints' | 'notices' | 'amenities'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'members' | 'payments' | 'expenses' | 'complaints' | 'notices' | 'amenities' | 'emergency' | 'tenants' | 'parking' | 'documents' | 'amc' | 'watermeters'>('dashboard');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [complaintFilter, setComplaintFilter] = useState<'All' | 'Open' | 'In Progress' | 'Resolved'>('All');
+
+  // Tier 1 Feature States
+  // Emergency Contacts
+  const [showAddEmergencyModal, setShowAddEmergencyModal] = useState(false);
+  const [emergencyFilterCategory, setEmergencyFilterCategory] = useState<string>('All');
+  const [newEmergName, setNewEmergName] = useState('');
+  const [newEmergCategory, setNewEmergCategory] = useState<EmergencyContact['Category']>('Police');
+  const [newEmergPhone, setNewEmergPhone] = useState('');
+  const [newEmergRoleTitle, setNewEmergRoleTitle] = useState('');
+  const [editingEmergContact, setEditingEmergContact] = useState<EmergencyContact | null>(null);
+
+  // Tenant Register & KYC
+  const [showAddTenantModal, setShowAddTenantModal] = useState(false);
+  const [tenantFilterKyc, setTenantFilterKyc] = useState<'All' | 'Pending' | 'Verified' | 'Rejected'>('All');
+  const [newTenFlatNo, setNewTenFlatNo] = useState('');
+  const [newTenName, setNewTenName] = useState('');
+  const [newTenPhone, setNewTenPhone] = useState('');
+  const [newTenEmail, setNewTenEmail] = useState('');
+  const [newTenMoveIn, setNewTenMoveIn] = useState('');
+  const [newTenMoveOut, setNewTenMoveOut] = useState('');
+  const [newTenAgreementUrl, setNewTenAgreementUrl] = useState('');
+  const [newTenIdProofUrl, setNewTenIdProofUrl] = useState('');
+  const [activeKycReviewTenant, setActiveKycReviewTenant] = useState<Tenant | null>(null);
+  const [kycRemarksInput, setKycRemarksInput] = useState('');
+  const [viewingDocModal, setViewingDocModal] = useState<{ title: string; url: string; label: string } | null>(null);
+
+  // Vehicle & Guest Parking Register
+  const [parkingSubTab, setParkingSubTab] = useState<'resident' | 'guest'>('resident');
+  const [showAddVehicleModal, setShowAddVehicleModal] = useState(false);
+  const [newVehFlatNo, setNewVehFlatNo] = useState('');
+  const [newVehOwnerName, setNewVehOwnerName] = useState('');
+  const [newVehNo, setNewVehNo] = useState('');
+  const [newVehType, setNewVehType] = useState<'2-Wheeler' | '4-Wheeler' | 'Other'>('4-Wheeler');
+  const [newVehSlotNo, setNewVehSlotNo] = useState('');
+  const [newVehStickerIssued, setNewVehStickerIssued] = useState(true);
+
+  const [showAddGuestParkingModal, setShowAddGuestParkingModal] = useState(false);
+  const [newGPassFlatNo, setNewGPassFlatNo] = useState('');
+  const [newGPassGuestName, setNewGPassGuestName] = useState('');
+  const [newGPassVehNo, setNewGPassVehNo] = useState('');
+  const [newGPassVehType, setNewGPassVehType] = useState<'2-Wheeler' | '4-Wheeler'>('4-Wheeler');
+  const [newGPassSlot, setNewGPassSlot] = useState('');
+  const [newGPassValidFrom, setNewGPassValidFrom] = useState('');
+  const [newGPassValidUntil, setNewGPassValidUntil] = useState('');
+
+  // Tier 2 Feature States
+  // 1. Society Document Repository
+  const [showAddDocModal, setShowAddDocModal] = useState(false);
+  const [docFilterCategory, setDocFilterCategory] = useState<string>('All');
+  const [newDocTitle, setNewDocTitle] = useState('');
+  const [newDocCategory, setNewDocCategory] = useState<SocietyDocument['Category']>('Legal Documents');
+  const [newDocUrl, setNewDocUrl] = useState('');
+  const [newDocFileName, setNewDocFileName] = useState('');
+  const [newDocIsPublic, setNewDocIsPublic] = useState(true);
+  const [newDocNotes, setNewDocNotes] = useState('');
+  const [previewingSocietyDoc, setPreviewingSocietyDoc] = useState<SocietyDocument | null>(null);
+
+  // 2. Lift Maintenance & AMC Register
+  const [showAddAmcModal, setShowAddAmcModal] = useState(false);
+  const [amcFilterCategory, setAmcFilterCategory] = useState<string>('All');
+  const [newAmcAssetName, setNewAmcAssetName] = useState('');
+  const [newAmcCategory, setNewAmcCategory] = useState<AssetAMC['Category']>('Lift / Elevator');
+  const [newAmcVendorName, setNewAmcVendorName] = useState('');
+  const [newAmcTechName, setNewAmcTechName] = useState('');
+  const [newAmcTechContact, setNewAmcTechContact] = useState('');
+  const [newAmcStartDate, setNewAmcStartDate] = useState('');
+  const [newAmcExpiryDate, setNewAmcExpiryDate] = useState('');
+  const [newAmcLastServiced, setNewAmcLastServiced] = useState('');
+  const [newAmcNextDue, setNewAmcNextDue] = useState('');
+  const [newAmcContractValue, setNewAmcContractValue] = useState('50000');
+  const [newAmcRemarks, setNewAmcRemarks] = useState('');
+  const [newAmcReportUrl, setNewAmcReportUrl] = useState('');
+  const [editingAmcItem, setEditingAmcItem] = useState<AssetAMC | null>(null);
+  const [showServiceLogModal, setShowServiceLogModal] = useState<AssetAMC | null>(null);
+  const [serviceNotes, setServiceNotes] = useState('');
+  const [serviceDate, setServiceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [nextServiceDueDate, setNextServiceDueDate] = useState('');
+  const [serviceReportUrl, setServiceReportUrl] = useState('');
+
+  // 3 & 4. Water Meters, Consumption & Water Tank Cleaning Register
+  const [waterSubTab, setWaterSubTab] = useState<'meters' | 'tanks'>('meters');
+  const [showBatchWaterMeterModal, setShowBatchWaterMeterModal] = useState(false);
+  const [waterReadingMonth, setWaterReadingMonth] = useState('July 2026');
+  const [batchMeterReadings, setBatchMeterReadings] = useState<{ flatNo: string; currentReading: string; prevReading: number; unitRate: number }[]>([]);
+  const [showAddTankCleaningModal, setShowAddTankCleaningModal] = useState(false);
+  const [tankName, setTankName] = useState('Overhead Tank A');
+  const [tankCapacity, setTankCapacity] = useState('50,000 Liters');
+  const [tankLastCleaned, setTankLastCleaned] = useState(new Date().toISOString().split('T')[0]);
+  const [tankNextDue, setTankNextDue] = useState(new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0]);
+  const [tankVendor, setTankVendor] = useState('AquaClean Services');
+  const [tankReportUrl, setTankReportUrl] = useState('');
+
+  // 1. Dashboard Urgent Emergency Alert Banner State
+  const [alertBannerDismissed, setAlertBannerDismissed] = useState(false);
+  const [showBroadcastAlertModal, setShowBroadcastAlertModal] = useState(false);
+  const [activeAlertBanner, setActiveAlertBanner] = useState({
+    id: 'alert-1',
+    title: '🚨 URGENT ANNOUNCEMENT: Overhead Water Tank Deep Cleaning',
+    message: 'Society water tank cleaning in progress. Water supply will be suspended on Thursday from 10:00 AM to 4:00 PM. Please store adequate water in advance.',
+    priority: 'Emergency',
+    timestamp: 'Today, 09:00 AM'
+  });
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+
+  // 2. Real-Time Push Notification Center State
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all');
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    title: string;
+    message: string;
+    category: 'gate' | 'notice' | 'payment' | 'amenity' | 'emergency';
+    timestamp: string;
+    read: boolean;
+    targetTab?: 'dashboard' | 'notices' | 'payments' | 'amenities' | 'emergency' | 'tenants' | 'parking';
+  }>>([
+    {
+      id: 'notif-1',
+      title: '🚪 Gate Visitor Check-in',
+      message: 'Visitor "Rajesh Sharma" (MH-12-AB-3456) checked in at Gate 1 for Flat 101.',
+      category: 'gate',
+      timestamp: '10 mins ago',
+      read: false,
+      targetTab: 'dashboard'
+    },
+    {
+      id: 'notif-2',
+      title: '🚨 Emergency Water Supply Alert',
+      message: 'Water tank deep cleaning on Thursday 10 AM - 4 PM. Water supply will be paused.',
+      category: 'emergency',
+      timestamp: '1 hour ago',
+      read: false,
+      targetTab: 'notices'
+    },
+    {
+      id: 'notif-3',
+      title: '💳 Monthly Maintenance Invoice Issued',
+      message: 'July 2026 Maintenance Bill for ₹3,500 has been generated and is ready for payment.',
+      category: 'payment',
+      timestamp: '3 hours ago',
+      read: false,
+      targetTab: 'payments'
+    },
+    {
+      id: 'notif-4',
+      title: '🏊 Amenity Booking Approved',
+      message: 'Clubhouse reservation request for Saturday 6:00 PM - 10:00 PM is APPROVED.',
+      category: 'amenity',
+      timestamp: '1 day ago',
+      read: true,
+      targetTab: 'amenities'
+    }
+  ]);
+
+  const unreadNotifCount = notifications.filter(n => !n.read).length;
+
+  const handleMarkAllNotifsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    triggerToast('All notifications marked as read!');
+  };
+
+  const handleSimulateNewPush = () => {
+    const newAlert = {
+      id: `notif-${Date.now()}`,
+      title: '⚡ Gate Authorization Alert',
+      message: 'Delivery Partner "Aman Verma" (Zomato) is at Gate 1 requesting entry.',
+      category: 'gate' as const,
+      timestamp: 'Just now',
+      read: false,
+      targetTab: 'dashboard' as const
+    };
+    setNotifications(prev => [newAlert, ...prev]);
+    triggerToast('⚡ Push Alert Received: Zomato Delivery at Gate 1!');
+  };
+
+  // 3. One-Click Ledger PDF / Print Statement Modal State
+  const [showPrintLedgerModal, setShowPrintLedgerModal] = useState(false);
+
+  const handleDownloadLedgerCSV = (flatNo: string) => {
+    const flatInvoices = invoices.filter(inv => inv.SocietyId === activeSocietyId && inv.FlatNo === flatNo);
+    const flatPayments = payments.filter(pmt => pmt.SocietyId === activeSocietyId && pmt.FlatNo === flatNo);
+    
+    let csv = `Society Name,${societyName}\nFlat Number,${flatNo}\nGenerated On,${new Date().toLocaleDateString()}\n\n`;
+    csv += `Type,Date/Month,Description,Amount (INR),Mode/Status\n`;
+    
+    flatInvoices.forEach(inv => {
+      csv += `Invoice,${inv.BillMonth},Maintenance Bill,${inv.TotalAmount},${inv.Status}\n`;
+    });
+    flatPayments.forEach(pmt => {
+      csv += `Payment,${pmt.Date},Dues Payment,${pmt.Amount},${pmt.Mode}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Society_Ledger_Flat_${flatNo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    triggerToast(`Ledger CSV statement downloaded for Flat ${flatNo}!`);
+  };
 
   // Detail Modal States
   const [activeMemberDetail, setActiveMemberDetail] = useState<Member | null>(null);
@@ -372,6 +713,7 @@ export default function MobileSimulator({
   const [tempBuildingType, setTempBuildingType] = useState(buildingType || 'Housing Society');
   const [tempStructureType, setTempStructureType] = useState<'standalone' | 'wings' | 'towers_wings'>('standalone');
   const [tempTowers, setTempTowers] = useState<any[]>([]);
+  const [tempFeatures, setTempFeatures] = useState<FeatureFlags>(activeFeatures);
 
   // Sync temp values when societyName/hasWings/wingsList changes from outside
   const wingsListStr = (wingsList || []).join(',');
@@ -381,7 +723,10 @@ export default function MobileSimulator({
     setTempWingsList((wingsList || []).join(', '));
     setTempPostalAddress(postalAddress || '');
     setTempBuildingType(buildingType || 'Housing Society');
-  }, [societyName, hasWings, wingsListStr, postalAddress, buildingType]);
+    if (activeSocietyObj?.FeaturesEnabled) {
+      setTempFeatures(activeSocietyObj.FeaturesEnabled);
+    }
+  }, [societyName, hasWings, wingsListStr, postalAddress, buildingType, activeSocietyObj]);
 
   // Member form state
   const [showMemberForm, setShowMemberForm] = useState(false);
@@ -702,7 +1047,7 @@ export default function MobileSimulator({
   const handleSaveSocietySettings = (e: React.FormEvent) => {
     e.preventDefault();
     const wings = tempWingsList.split(',').map(w => w.trim()).filter(w => w !== '');
-    onUpdateSocietySettings(tempSocietyName, tempHasWings, wings, tempPostalAddress, tempBuildingType, tempStructureType, tempTowers);
+    onUpdateSocietySettings(tempSocietyName, tempHasWings, wings, tempPostalAddress, tempBuildingType, tempStructureType, tempTowers, tempFeatures);
     setShowSettingsModal(false);
     triggerToast('Society settings updated!');
   };
@@ -1070,10 +1415,10 @@ export default function MobileSimulator({
             )}
 
             {/* Dynamic Display screen */}
-            <div className={isMobile ? "w-full h-full flex-1 bg-slate-100 flex flex-col relative select-none" : "w-full h-full bg-slate-100 rounded-[40px] overflow-hidden flex flex-col relative border border-slate-950/20 select-none"}>
+            <div className={isMobile ? `w-full h-full flex-1 flex flex-col relative select-none ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-800'}` : `w-full h-full rounded-[40px] overflow-hidden flex flex-col relative border select-none ${isDark ? 'bg-slate-950 text-slate-100 border-slate-800' : 'bg-slate-100 text-slate-800 border-slate-950/20'}`}>
               {/* Status Bar */}
               {!isMobile && (
-                <div className="h-11 bg-white px-6 pt-5 flex justify-between items-center text-xs font-semibold text-slate-800 z-40">
+                <div className={`h-11 px-6 pt-5 flex justify-between items-center text-xs font-semibold z-40 transition-colors ${isDark ? 'bg-slate-900 text-slate-300' : 'bg-white text-slate-800'}`}>
                   <span>09:41</span>
                   <div className="flex items-center gap-1.5">
                     <Signal className="w-3.5 h-3.5" />
@@ -1678,31 +2023,55 @@ export default function MobileSimulator({
             // ===============================================================
             // ==================== MAIN SIMULATED APP =======================
             // ===============================================================
-            <div className="flex-1 flex flex-col min-h-0 bg-slate-50 relative">
+            <div className={`flex-1 flex flex-col min-h-0 relative transition-colors ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
               {/* Header Bar */}
-              <div className="bg-white px-3 py-2.5 border-b border-slate-150 flex justify-between items-center shadow-xs">
+              <div className={`px-3 py-2.5 border-b flex justify-between items-center shadow-xs transition-colors ${
+                isDark ? 'bg-slate-900/90 border-slate-800 text-slate-100' : 'bg-white border-slate-150 text-slate-900'
+              }`}>
                 <div className="min-w-0 flex-1 pr-2">
                   <div className="relative inline-block max-w-full">
-                    <div className="text-xs font-black text-purple-700 bg-purple-50 border border-purple-200/60 rounded-lg px-2 py-1 max-w-[170px] truncate whitespace-nowrap flex items-center gap-1 select-none" title={societyName}>
+                    <div className={`text-xs font-black rounded-lg px-2 py-1 max-w-[170px] truncate whitespace-nowrap flex items-center gap-1 select-none ${
+                      isDark ? 'text-purple-300 bg-purple-950/70 border border-purple-800/60' : 'text-purple-700 bg-purple-50 border border-purple-200/60'
+                    }`} title={societyName}>
                       🏢 {societyName}
                     </div>
                   </div>
                   <div className="flex flex-col mt-0.5">
-                    <p className="text-[9px] text-slate-500 font-bold flex items-center gap-1 whitespace-nowrap truncate max-w-[170px]">
+                    <p className={`text-[9px] font-bold flex items-center gap-1 whitespace-nowrap truncate max-w-[170px] ${
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    }`}>
                       <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
                       {hasWings ? `${wingsList.length} Wings • ${buildingType}` : `${userRole === 'Admin' ? 'Admin Portal' : 'Member Portal'} • ${buildingType}`}
                     </p>
                     {lastSynced && (
-                      <p className="text-[8px] text-purple-600/90 font-bold tracking-tight">Last synced: {lastSynced}</p>
+                      <p className={`text-[8px] font-bold tracking-tight ${isDark ? 'text-purple-400' : 'text-purple-600/90'}`}>Last synced: {lastSynced}</p>
                     )}
                   </div>
                 </div>
                 
                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Real-time Notification Bell */}
+                  <button 
+                    onClick={() => setShowNotificationsModal(true)}
+                    className={`p-1.5 rounded-full transition-colors relative flex items-center justify-center min-w-[32px] min-h-[32px] cursor-pointer ${
+                      isDark ? 'hover:bg-slate-800 text-purple-300' : 'hover:bg-purple-50 text-purple-600'
+                    }`}
+                    title="Real-time Notification Center"
+                  >
+                    <Bell className="w-4 h-4" />
+                    {unreadNotifCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 bg-rose-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse border border-white dark:border-slate-900 shadow-2xs">
+                        {unreadNotifCount}
+                      </span>
+                    )}
+                  </button>
+
                   {userRole === 'Admin' && (
                     <button 
                       onClick={() => setShowAuditLogsModal(true)}
-                      className="p-1.5 hover:bg-purple-50 text-purple-600 rounded-full transition-colors relative flex items-center justify-center min-w-[32px] min-h-[32px]"
+                      className={`p-1.5 rounded-full transition-colors relative flex items-center justify-center min-w-[32px] min-h-[32px] ${
+                        isDark ? 'hover:bg-slate-800 text-purple-400' : 'hover:bg-purple-50 text-purple-600'
+                      }`}
                       title="Admin Audit Logs"
                     >
                       <Clock className="w-4 h-4" />
@@ -1719,9 +2088,12 @@ export default function MobileSimulator({
                         setTempBuildingType(buildingType);
                         setTempStructureType(activeStructureType);
                         setTempTowers(JSON.parse(JSON.stringify(activeTowers)));
+                        setTempFeatures(activeFeatures);
                         setShowSettingsModal(true);
                       }}
-                      className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
+                      className={`p-1.5 rounded-full transition-colors flex items-center justify-center min-w-[32px] min-h-[32px] ${
+                        isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+                      }`}
                       title="Society & Wings Settings"
                     >
                       <Settings className="w-4 h-4" />
@@ -1730,7 +2102,9 @@ export default function MobileSimulator({
                   <button 
                     onClick={handleManualRefresh}
                     disabled={syncing}
-                    className="p-1.5 hover:bg-slate-100 rounded-full text-slate-500 transition-colors flex items-center justify-center min-w-[32px] min-h-[32px]"
+                    className={`p-1.5 rounded-full transition-colors flex items-center justify-center min-w-[32px] min-h-[32px] ${
+                      isDark ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'
+                    }`}
                     title="Pull-to-Refresh from Database"
                   >
                     <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin text-purple-600' : ''}`} />
@@ -1745,8 +2119,10 @@ export default function MobileSimulator({
                     });
                     if (myMatchingFlats.length > 1) {
                       return (
-                        <div className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-lg px-2 py-1 shadow-2xs">
-                          <Building2 className="w-3.5 h-3.5 text-purple-600 shrink-0 animate-pulse" />
+                        <div className={`flex items-center gap-1 border rounded-lg px-2 py-1 shadow-2xs ${
+                          isDark ? 'bg-purple-950/70 border-purple-800/60 text-purple-300' : 'bg-purple-50 border-purple-200 text-purple-800'
+                        }`}>
+                          <Building2 className="w-3.5 h-3.5 text-purple-400 shrink-0 animate-pulse" />
                           <select
                             value={`${activeSocietyId}:${loggedInMemberFlat}`}
                             onChange={(e) => {
@@ -1759,12 +2135,16 @@ export default function MobileSimulator({
                               }
                               triggerToast(`Switched active unit to Flat ${flatNo} (${societies?.find(s => s.id === socId)?.Name || socId})`);
                             }}
-                            className="bg-transparent border-none text-[10px] font-black focus:outline-none cursor-pointer text-purple-700 py-0.5"
+                            className={`bg-transparent border-none text-[10px] font-black focus:outline-none cursor-pointer py-0.5 ${
+                              isDark ? 'text-purple-300' : 'text-purple-700'
+                            }`}
                           >
                             {myMatchingFlats.map((prop, idx) => {
                               const soc = societies?.find(s => s.id === prop.SocietyId);
                               return (
-                                <option key={idx} value={`${prop.SocietyId}:${prop.FlatNo}`} className="text-slate-800 bg-white font-sans font-bold">
+                                <option key={idx} value={`${prop.SocietyId}:${prop.FlatNo}`} className={`font-sans font-bold ${
+                                  isDark ? 'text-slate-100 bg-slate-900' : 'text-slate-800 bg-white'
+                                }`}>
                                   {soc ? soc.Name : prop.SocietyId} • Flat {prop.FlatNo}
                                 </option>
                               );
@@ -1777,7 +2157,9 @@ export default function MobileSimulator({
                   })()}
                   <button 
                     onClick={handleLogout}
-                    className="p-1.5 hover:bg-rose-50 text-rose-600 border border-rose-200/50 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold px-2 py-1 shadow-2xs"
+                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold px-2 py-1 shadow-2xs ${
+                      isDark ? 'hover:bg-rose-950/60 text-rose-300 border border-rose-800/60' : 'hover:bg-rose-50 text-rose-600 border border-rose-200/50'
+                    }`}
                     title="Lock Application"
                   >
                     <LogOut className="w-3.5 h-3.5" />
@@ -1838,6 +2220,62 @@ export default function MobileSimulator({
                         )}
                       </div>
                     </div>
+
+                    {/* High-Priority Dashboard Urgent Emergency Alert Banner */}
+                    {!alertBannerDismissed && activeAlertBanner && (
+                      <div className="bg-gradient-to-r from-amber-600 via-rose-600 to-red-600 text-white p-3 rounded-2xl shadow-md border border-rose-400/30 relative overflow-hidden">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                              <ShieldAlert className="w-4 h-4 text-white animate-pulse" />
+                            </div>
+                            <div>
+                              <span className="text-[7.5px] font-black uppercase tracking-widest bg-black/30 px-1.5 py-0.5 rounded text-amber-200">
+                                {activeAlertBanner.priority} ALERT
+                              </span>
+                              <h4 className="text-[11px] font-extrabold text-white leading-tight mt-0.5">
+                                {activeAlertBanner.title}
+                              </h4>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setAlertBannerDismissed(true)} 
+                            className="p-1 hover:bg-white/20 rounded-full text-white/80 hover:text-white transition-colors cursor-pointer"
+                            title="Dismiss Banner"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        
+                        <p className="text-[9.5px] text-white/95 leading-relaxed font-medium mt-2 bg-black/20 p-2 rounded-xl">
+                          {activeAlertBanner.message}
+                        </p>
+
+                        <div className="flex justify-between items-center mt-2.5 pt-1.5 border-t border-white/20 text-[8.5px]">
+                          <span className="text-white/80 font-bold">{activeAlertBanner.timestamp}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setCurrentTab('notices')}
+                              className="bg-white text-rose-700 hover:bg-rose-50 font-extrabold px-2.5 py-1 rounded-lg transition-colors cursor-pointer shadow-3xs"
+                            >
+                              View Notices →
+                            </button>
+                            {userRole === 'Admin' && (
+                              <button
+                                onClick={() => {
+                                  setBroadcastTitle(activeAlertBanner.title);
+                                  setBroadcastMessage(activeAlertBanner.message);
+                                  setShowBroadcastAlertModal(true);
+                                }}
+                                className="bg-black/30 hover:bg-black/40 text-white font-extrabold px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {userRole === 'Member' ? (
                       /* RESIDENT MEMBER DASHBOARD */
@@ -1943,6 +2381,124 @@ export default function MobileSimulator({
                             </div>
                           );
                         })()}
+
+                        {/* Quick Access Tier 1 & Tier 2 Features Tile Grid */}
+                        <div className={`p-3 rounded-2xl border space-y-2 transition-colors ${cardBgClass}`}>
+                          <div className="flex justify-between items-center px-0.5">
+                            <span className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-slate-400' : 'text-slate-400'}`}>QUICK SOCIETY SERVICES</span>
+                            <span className={`text-[8px] px-1.5 py-0.5 rounded font-extrabold uppercase ${
+                              isDark ? 'bg-purple-950/80 text-purple-300 border border-purple-800/60' : 'bg-purple-100 text-purple-700'
+                            }`}>Tiers 1 & 2 Active</span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Emergency Contacts Tile */}
+                            <button
+                              onClick={() => setCurrentTab('emergency')}
+                              className={`p-2.5 rounded-xl text-left transition-all cursor-pointer flex items-center gap-2.5 group border ${
+                                isDark ? 'bg-rose-950/40 hover:bg-rose-900/60 border-rose-900/50' : 'bg-rose-50/70 hover:bg-rose-100/80 border-rose-200/80'
+                              }`}
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                                <PhoneCall className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h5 className={`font-extrabold text-[10px] leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>SOS & Emergency</h5>
+                                <p className={`text-[8px] font-semibold truncate mt-0.5 ${isDark ? 'text-rose-300' : 'text-rose-700'}`}>Helplines & Committee</p>
+                              </div>
+                            </button>
+
+                            {/* Tenant Register Tile */}
+                            {activeFeatures.tenantRegister !== false && (
+                              <button
+                                onClick={() => setCurrentTab('tenants')}
+                                className={`p-2.5 rounded-xl text-left transition-all cursor-pointer flex items-center gap-2.5 group border ${
+                                  isDark ? 'bg-amber-950/40 hover:bg-amber-900/60 border-amber-900/50' : 'bg-amber-50/70 hover:bg-amber-100/80 border-amber-200/80'
+                                }`}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                                  <KeyRound className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-extrabold text-[10px] leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Tenant Register</h5>
+                                  <p className={`text-[8px] font-semibold truncate mt-0.5 ${isDark ? 'text-amber-300' : 'text-amber-800'}`}>Agreement & KYC</p>
+                                </div>
+                              </button>
+                            )}
+
+                            {/* Parking & Vehicles Tile */}
+                            {activeFeatures.parkingRegister !== false && (
+                              <button
+                                onClick={() => setCurrentTab('parking')}
+                                className={`p-2.5 rounded-xl text-left transition-all cursor-pointer flex items-center gap-2.5 group border ${
+                                  isDark ? 'bg-indigo-950/40 hover:bg-indigo-900/60 border-indigo-900/50' : 'bg-indigo-50/70 hover:bg-indigo-100/80 border-indigo-200/80'
+                                }`}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                                  <Car className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-extrabold text-[10px] leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Vehicles & Parking</h5>
+                                  <p className={`text-[8px] font-semibold truncate mt-0.5 ${isDark ? 'text-indigo-300' : 'text-indigo-700'}`}>Plates & Guest Passes</p>
+                                </div>
+                              </button>
+                            )}
+
+                            {/* Central Document Repository Tile */}
+                            {activeFeatures.documentVault !== false && (
+                              <button
+                                onClick={() => setCurrentTab('documents')}
+                                className={`p-2.5 rounded-xl text-left transition-all cursor-pointer flex items-center gap-2.5 group border ${
+                                  isDark ? 'bg-blue-950/40 hover:bg-blue-900/60 border-blue-900/50' : 'bg-blue-50/70 hover:bg-blue-100/80 border-blue-200/80'
+                                }`}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-extrabold text-[10px] leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Document Vault</h5>
+                                  <p className={`text-[8px] font-semibold truncate mt-0.5 ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>AGMs, Audits & Rules</p>
+                                </div>
+                              </button>
+                            )}
+
+                            {/* Lift & AMC Register Tile */}
+                            {activeFeatures.assetAMC !== false && (
+                              <button
+                                onClick={() => setCurrentTab('amc')}
+                                className={`p-2.5 rounded-xl text-left transition-all cursor-pointer flex items-center gap-2.5 group border ${
+                                  isDark ? 'bg-teal-950/40 hover:bg-teal-900/60 border-teal-900/50' : 'bg-teal-50/70 hover:bg-teal-100/80 border-teal-200/80'
+                                }`}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                                  <Wrench className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-extrabold text-[10px] leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>AMC & Lifts</h5>
+                                  <p className={`text-[8px] font-semibold truncate mt-0.5 ${isDark ? 'text-teal-300' : 'text-teal-700'}`}>Servicing & Vendor AMC</p>
+                                </div>
+                              </button>
+                            )}
+
+                            {/* Water Meter & Tank Cleaning Tile */}
+                            {activeFeatures.waterMeters !== false && (
+                              <button
+                                onClick={() => setCurrentTab('watermeters')}
+                                className={`p-2.5 rounded-xl text-left transition-all cursor-pointer flex items-center gap-2.5 group border ${
+                                  isDark ? 'bg-cyan-950/40 hover:bg-cyan-900/60 border-cyan-900/50' : 'bg-cyan-50/70 hover:bg-cyan-100/80 border-cyan-200/80'
+                                }`}
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-cyan-600 text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                                  <Droplets className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <h5 className={`font-extrabold text-[10px] leading-tight ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>Water Maintenance</h5>
+                                  <p className={`text-[8px] font-semibold truncate mt-0.5 ${isDark ? 'text-cyan-300' : 'text-cyan-700'}`}>Meters & Tank Cleaning</p>
+                                </div>
+                              </button>
+                            )}
+                          </div>
+                        </div>
 
                         {/* Multiple Properties Switcher / List */}
                         {(() => {
@@ -2080,111 +2636,113 @@ export default function MobileSimulator({
                         </div>
 
                         {/* Resident Gatekeeper & Visitor Management Simulator */}
-                        <div id="visitor-manager-resident-card" className="bg-white p-3 rounded-2xl border border-slate-150 shadow-xs space-y-2">
-                          <div className="flex justify-between items-center px-0.5">
-                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                              <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                              Gatekeeper Visitor Logs
-                            </span>
-                            <button
-                              onClick={() => {
-                                setNewVisName('');
-                                setNewVisContact('');
-                                setNewVisVehicle('');
-                                setNewVisPurpose('Delivery');
-                                setShowAddVisitorModal(true);
-                              }}
-                              className="text-[9px] font-bold text-purple-600 hover:underline flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Plus className="w-3 h-3" /> Pre-Approve Guest
-                            </button>
-                          </div>
+                        {activeFeatures.gatekeeper !== false && (
+                          <div id="visitor-manager-resident-card" className="bg-white p-3 rounded-2xl border border-slate-150 shadow-xs space-y-2">
+                            <div className="flex justify-between items-center px-0.5">
+                              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                                Gatekeeper Visitor Logs
+                              </span>
+                              <button
+                                onClick={() => {
+                                  setNewVisName('');
+                                  setNewVisContact('');
+                                  setNewVisVehicle('');
+                                  setNewVisPurpose('Delivery');
+                                  setShowAddVisitorModal(true);
+                                }}
+                                className="text-[9px] font-bold text-purple-600 hover:underline flex items-center gap-0.5 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" /> Pre-Approve Guest
+                              </button>
+                            </div>
 
-                          <div className="space-y-1.5">
-                            {/* Pending Approvals (High Visibility Alerts) */}
-                            {visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status === 'Pending Approval' && v.SocietyId === activeSocietyId).map(v => (
-                              <div key={v.id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-1.5 animate-pulse shadow-sm">
-                                <div className="flex justify-between items-start text-[10px]">
-                                  <div className="min-w-0 flex-1">
-                                    <span className="bg-amber-150 text-amber-900 border border-amber-200 font-extrabold text-[7.5px] px-1.5 py-0.5 rounded uppercase tracking-wide inline-block leading-none">
-                                      🔔 Gate Authorization Request
-                                    </span>
-                                    <h5 className="font-extrabold text-slate-900 mt-1.5 truncate">{v.VisitorName}</h5>
-                                    <p className="text-[8.5px] text-slate-600 mt-0.5">Purpose: <strong className="text-slate-800">{v.Purpose}</strong> {v.VehicleNo ? `• Vehicle: ${v.VehicleNo}` : ''}</p>
-                                  </div>
-                                  <span className="text-[7.5px] text-slate-400 font-mono shrink-0">
-                                    {new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                </div>
-                                <div className="flex gap-1.5 mt-1">
-                                  <button
-                                    onClick={() => {
-                                      if (onUpdateVisitor) {
-                                        onUpdateVisitor(v.id, 'Approved', members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident');
-                                        triggerToast('Visitor access APPROVED at the gate!');
-                                      }
-                                    }}
-                                    className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[9px] transition-colors cursor-pointer text-center"
-                                  >
-                                    Approve Entry
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (onUpdateVisitor) {
-                                        onUpdateVisitor(v.id, 'Denied', members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident');
-                                        triggerToast('Visitor access DENIED!');
-                                      }
-                                    }}
-                                    className="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-[9px] transition-colors cursor-pointer text-center"
-                                  >
-                                    Deny Entry
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-
-                            {/* Normal Logs List */}
-                            <div className="space-y-1">
-                              {(() => {
-                                const myVisitors = visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status !== 'Pending Approval' && v.SocietyId === activeSocietyId);
-                                const pendingCount = visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status === 'Pending Approval' && v.SocietyId === activeSocietyId).length;
-                                if (myVisitors.length === 0 && pendingCount === 0) {
-                                  return (
-                                    <p className="text-center text-[9px] text-slate-400 py-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">No active visitor logs or pre-approvals</p>
-                                  );
-                                }
-                                return myVisitors.slice(0, 3).map(v => (
-                                  <div key={v.id} className="p-2 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-[10px]">
-                                    <div className="min-w-0 pr-2">
-                                      <div className="flex items-center gap-1.5">
-                                        <h5 className="font-extrabold text-slate-800 truncate">{v.VisitorName}</h5>
-                                        {v.AccessToken && (
-                                          <span className="text-[7.5px] bg-purple-100 text-purple-800 font-mono font-bold px-1.5 py-0.2 rounded border border-purple-200">
-                                            🔑 {v.AccessToken}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-[8px] text-slate-400 mt-0.5 font-semibold">
-                                        {v.Purpose} • {v.CheckOutTime ? `Checked Out: ${new Date(v.CheckOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : `In: ${new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
-                                      </p>
+                            <div className="space-y-1.5">
+                              {/* Pending Approvals (High Visibility Alerts) */}
+                              {visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status === 'Pending Approval' && v.SocietyId === activeSocietyId).map(v => (
+                                <div key={v.id} className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-1.5 animate-pulse shadow-sm">
+                                  <div className="flex justify-between items-start text-[10px]">
+                                    <div className="min-w-0 flex-1">
+                                      <span className="bg-amber-150 text-amber-900 border border-amber-200 font-extrabold text-[7.5px] px-1.5 py-0.5 rounded uppercase tracking-wide inline-block leading-none">
+                                        🔔 Gate Authorization Request
+                                      </span>
+                                      <h5 className="font-extrabold text-slate-900 mt-1.5 truncate">{v.VisitorName}</h5>
+                                      <p className="text-[8.5px] text-slate-600 mt-0.5">Purpose: <strong className="text-slate-800">{v.Purpose}</strong> {v.VehicleNo ? `• Vehicle: ${v.VehicleNo}` : ''}</p>
                                     </div>
-                                    <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
-                                      v.Status === 'Approved'
-                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                        : v.Status === 'Pre-Approved'
-                                        ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                        : v.Status === 'Checked Out'
-                                        ? 'bg-slate-100 text-slate-600 border border-slate-200'
-                                        : 'bg-rose-50 text-rose-700 border border-rose-100'
-                                    }`}>
-                                      {v.Status}
+                                    <span className="text-[7.5px] text-slate-400 font-mono shrink-0">
+                                      {new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                   </div>
-                                ));
-                              })()}
+                                  <div className="flex gap-1.5 mt-1">
+                                    <button
+                                      onClick={() => {
+                                        if (onUpdateVisitor) {
+                                          onUpdateVisitor(v.id, 'Approved', members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident');
+                                          triggerToast('Visitor access APPROVED at the gate!');
+                                        }
+                                      }}
+                                      className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-lg text-[9px] transition-colors cursor-pointer text-center"
+                                    >
+                                      Approve Entry
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        if (onUpdateVisitor) {
+                                          onUpdateVisitor(v.id, 'Denied', members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident');
+                                          triggerToast('Visitor access DENIED!');
+                                        }
+                                      }}
+                                      className="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-[9px] transition-colors cursor-pointer text-center"
+                                    >
+                                      Deny Entry
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                              {/* Normal Logs List */}
+                              <div className="space-y-1">
+                                {(() => {
+                                  const myVisitors = visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status !== 'Pending Approval' && v.SocietyId === activeSocietyId);
+                                  const pendingCount = visitors.filter(v => v.FlatNo === loggedInMemberFlat && v.Status === 'Pending Approval' && v.SocietyId === activeSocietyId).length;
+                                  if (myVisitors.length === 0 && pendingCount === 0) {
+                                    return (
+                                      <p className="text-center text-[9px] text-slate-400 py-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">No active visitor logs or pre-approvals</p>
+                                    );
+                                  }
+                                  return myVisitors.slice(0, 3).map(v => (
+                                    <div key={v.id} className="p-2 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-[10px]">
+                                      <div className="min-w-0 pr-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <h5 className="font-extrabold text-slate-800 truncate">{v.VisitorName}</h5>
+                                          {v.AccessToken && (
+                                            <span className="text-[7.5px] bg-purple-100 text-purple-800 font-mono font-bold px-1.5 py-0.2 rounded border border-purple-200">
+                                              🔑 {v.AccessToken}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-[8px] text-slate-400 mt-0.5 font-semibold">
+                                          {v.Purpose} • {v.CheckOutTime ? `Checked Out: ${new Date(v.CheckOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : `In: ${new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                                        </p>
+                                      </div>
+                                      <span className={`text-[7.5px] font-black px-1.5 py-0.5 rounded-full shrink-0 ${
+                                        v.Status === 'Approved'
+                                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                          : v.Status === 'Pre-Approved'
+                                          ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                          : v.Status === 'Checked Out'
+                                          ? 'bg-slate-100 text-slate-600 border border-slate-200'
+                                          : 'bg-rose-50 text-rose-700 border border-rose-100'
+                                      }`}>
+                                        {v.Status}
+                                      </span>
+                                    </div>
+                                  ));
+                                })()}
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </>
                     ) : (
                       /* COMMITTEE ADMIN DASHBOARD */
@@ -3062,9 +3620,23 @@ export default function MobileSimulator({
                 {/* ----------------- TABS: PAYMENTS ----------------- */}
                 {currentTab === 'payments' && (
                   <div className="space-y-2.5 relative">
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center flex-wrap gap-1.5">
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Payments Ledger</span>
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Autosynced</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setShowPrintLedgerModal(true)}
+                          className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold flex items-center gap-1 transition-all cursor-pointer shadow-3xs active:scale-95 ${
+                            isDark 
+                              ? 'bg-purple-950/90 hover:bg-purple-900 text-purple-300 border border-purple-800/80' 
+                              : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200'
+                          }`}
+                          title="Generate & Print Official Ledger Receipt Statement"
+                        >
+                          <Printer className="w-3 h-3 text-purple-500 shrink-0" />
+                          <span>Print Statement (PDF)</span>
+                        </button>
+                        <span className="text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Autosynced</span>
+                      </div>
                     </div>
 
                     {/* Collection vs Dues bar chart */}
@@ -3416,84 +3988,1306 @@ export default function MobileSimulator({
                     onAddAuditLog={onAddAuditLog || (() => {})}
                   />
                 )}
+
+                {/* ----------------- TABS: EMERGENCY CONTACTS ----------------- */}
+                {currentTab === 'emergency' && (
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex justify-between items-center px-0.5">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
+                          <ShieldAlert className="w-4 h-4 text-rose-600" />
+                          Emergency Calls & SOS Hub
+                        </h3>
+                        <p className="text-[9px] text-slate-400 font-medium">Instant tap-to-call helplines & committee desk</p>
+                      </div>
+                      {(userRole === 'Admin' || userRole === 'Committee Member') && (
+                        <button
+                          onClick={() => {
+                            setNewEmergName('');
+                            setNewEmergCategory('Police');
+                            setNewEmergPhone('');
+                            setNewEmergRoleTitle('');
+                            setEditingEmergContact(null);
+                            setShowAddEmergencyModal(true);
+                          }}
+                          className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-[9px] font-black tracking-wide transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Helpline</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Chips */}
+                    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                      {['All', 'Police', 'Ambulance', 'Fire', 'Hospital', 'Security', 'Electrician', 'Plumber', 'Committee'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setEmergencyFilterCategory(cat)}
+                          className={`px-2.5 py-1 text-[9px] font-bold rounded-full border transition-all whitespace-nowrap ${
+                            emergencyFilterCategory === cat
+                              ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Contacts Grid / List */}
+                    <div className="space-y-2">
+                      {(() => {
+                        const filtered = emergencyContacts.filter(c => {
+                          if (c.SocietyId && c.SocietyId !== activeSocietyId) return false;
+                          if (emergencyFilterCategory !== 'All' && c.Category !== emergencyFilterCategory) return false;
+                          return true;
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-250 text-slate-400">
+                              <PhoneCall className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                              <p className="text-xs font-semibold">No emergency contacts listed</p>
+                            </div>
+                          );
+                        }
+
+                        return filtered.map((c) => {
+                          const isCommittee = c.Category === 'Committee';
+                          return (
+                            <div key={c.id} className="bg-white p-3 rounded-2xl border border-slate-150 shadow-2xs flex items-center justify-between hover:border-rose-200 transition-colors">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                                  c.IsImportant 
+                                    ? 'bg-rose-100 text-rose-700 border-rose-200' 
+                                    : (isCommittee ? 'bg-purple-100 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-700 border-slate-200')
+                                }`}>
+                                  <PhoneCall className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <h4 className="text-xs font-black text-slate-800 truncate">{c.Name}</h4>
+                                    {c.IsImportant && (
+                                      <span className="text-[7px] bg-rose-600 text-white px-1 py-0.2 rounded font-black uppercase tracking-wider shrink-0">
+                                        SOS
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-[9px] text-slate-400 font-semibold truncate">
+                                    {c.RoleOrTitle || c.Category} • {c.Category}
+                                  </p>
+                                  <span className="text-[10px] font-mono font-bold text-slate-700 block mt-0.5">{c.Phone}</span>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
+                                <a
+                                  href={`tel:${c.Phone}`}
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-extrabold flex items-center gap-1 shadow-xs transition-all active:scale-95"
+                                >
+                                  <Phone className="w-3 h-3" />
+                                  <span>Call</span>
+                                </a>
+                                {(userRole === 'Admin' || userRole === 'Committee Member') && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingEmergContact(c);
+                                      setNewEmergName(c.Name);
+                                      setNewEmergCategory(c.Category);
+                                      setNewEmergPhone(c.Phone);
+                                      setNewEmergRoleTitle(c.RoleOrTitle || '');
+                                      setShowAddEmergencyModal(true);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg cursor-pointer transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ----------------- TABS: TENANT REGISTER & KYC ----------------- */}
+                {currentTab === 'tenants' && (
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex justify-between items-center px-0.5">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
+                          <KeyRound className="w-4 h-4 text-amber-600" />
+                          Tenant KYC & Rental Register
+                        </h3>
+                        <p className="text-[9px] text-slate-400 font-medium">Flat mappings, Police verification & Lease agreements</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setNewTenFlatNo(userRole === 'Member' ? loggedInMemberFlat : '');
+                          setNewTenName('');
+                          setNewTenPhone('');
+                          setNewTenEmail('');
+                          setNewTenMoveIn('');
+                          setNewTenMoveOut('');
+                          setNewTenAgreementUrl('');
+                          setNewTenIdProofUrl('');
+                          setShowAddTenantModal(true);
+                        }}
+                        className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-[9px] font-black tracking-wide transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Register Tenant</span>
+                      </button>
+                    </div>
+
+                    {/* Stats Banner */}
+                    <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+                      <div className="text-center">
+                        <span className="text-[8px] uppercase text-slate-400 font-extrabold block">Total Tenants</span>
+                        <span className="text-sm font-black text-slate-800">
+                          {tenants.filter(t => !t.SocietyId || t.SocietyId === activeSocietyId).length}
+                        </span>
+                      </div>
+                      <div className="text-center border-x border-slate-200">
+                        <span className="text-[8px] uppercase text-emerald-600 font-extrabold block">Verified KYC</span>
+                        <span className="text-sm font-black text-emerald-700">
+                          {tenants.filter(t => (!t.SocietyId || t.SocietyId === activeSocietyId) && t.KycStatus === 'Verified').length}
+                        </span>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-[8px] uppercase text-amber-600 font-extrabold block">Pending Approval</span>
+                        <span className="text-sm font-black text-amber-700">
+                          {tenants.filter(t => (!t.SocietyId || t.SocietyId === activeSocietyId) && t.KycStatus === 'Pending').length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Filter Chips */}
+                    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
+                      {['All', 'Pending', 'Verified', 'Rejected'].map((status) => (
+                        <button
+                          key={status}
+                          onClick={() => setTenantFilterKyc(status as any)}
+                          className={`px-2.5 py-1 text-[9px] font-bold rounded-full border transition-all ${
+                            tenantFilterKyc === status
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {status}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Tenant Cards */}
+                    <div className="space-y-2.5">
+                      {(() => {
+                        const filtered = tenants.filter(t => {
+                          if (t.SocietyId && t.SocietyId !== activeSocietyId) return false;
+                          if (userRole === 'Member' && t.FlatNo !== loggedInMemberFlat) return false;
+                          if (tenantFilterKyc !== 'All' && t.KycStatus !== tenantFilterKyc) return false;
+                          return true;
+                        });
+
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-250 text-slate-400">
+                              <User className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                              <p className="text-xs font-semibold">No tenant records found</p>
+                              <p className="text-[9px] text-slate-400 mt-0.5">Use "Register Tenant" above to add rental details</p>
+                            </div>
+                          );
+                        }
+
+                        return filtered.map((t) => (
+                          <div key={t.id} className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 hover:border-amber-300 transition-colors">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <span className="px-2 py-0.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-bold">
+                                  Flat {t.FlatNo}
+                                </span>
+                                <h4 className="text-xs font-black text-slate-800 mt-1">{t.TenantName}</h4>
+                                <p className="text-[9px] text-slate-400 font-semibold">{t.ContactNo} • {t.Email || 'No Email'}</p>
+                              </div>
+
+                              <div className="text-right">
+                                <span className={`inline-flex items-center gap-1 text-[8px] font-black px-2 py-0.5 rounded-full border ${
+                                  t.KycStatus === 'Verified'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : (t.KycStatus === 'Rejected' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse')
+                                }`}>
+                                  {t.KycStatus === 'Verified' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                                  {t.KycStatus === 'Pending' && <Clock className="w-2.5 h-2.5" />}
+                                  {t.KycStatus === 'Rejected' && <AlertCircle className="w-2.5 h-2.5" />}
+                                  <span>KYC {t.KycStatus}</span>
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Move In / Out Dates */}
+                            <div className="grid grid-cols-2 gap-2 text-[9px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+                              <div>
+                                <span className="text-slate-400 block font-bold uppercase text-[7px]">Move-In Date</span>
+                                <span className="font-semibold text-slate-700">{t.MoveInDate || 'Not specified'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block font-bold uppercase text-[7px]">Lease / Move-Out</span>
+                                <span className="font-semibold text-slate-700">{t.MoveOutDate || 'Ongoing'}</span>
+                              </div>
+                            </div>
+
+                            {/* Documents Attachment Action Buttons */}
+                            <div className="flex flex-wrap gap-1.5 pt-1">
+                              {t.AgreementDocUrl ? (
+                                <button
+                                  onClick={() => setViewingDocModal({ title: `Rental Agreement (${t.TenantName})`, url: t.AgreementDocUrl!, label: `Flat ${t.FlatNo}` })}
+                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[9px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <FileText className="w-3 h-3 text-purple-600" />
+                                  <span>Agreement PDF</span>
+                                </button>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 italic">No Agreement attached</span>
+                              )}
+
+                              {t.IdProofUrl ? (
+                                <button
+                                  onClick={() => setViewingDocModal({ title: `Police Verification / ID Proof (${t.TenantName})`, url: t.IdProofUrl!, label: `Flat ${t.FlatNo}` })}
+                                  className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[9px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                                  <span>Police Verification Proof</span>
+                                </button>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 italic">No ID Proof attached</span>
+                              )}
+                            </div>
+
+                            {/* Remarks if rejected */}
+                            {t.KycStatus === 'Rejected' && t.Remarks && (
+                              <div className="p-2 bg-rose-50 text-rose-800 text-[9px] rounded-lg border border-rose-100">
+                                <strong>Rejection Reason:</strong> {t.Remarks}
+                              </div>
+                            )}
+
+                            {/* Admin Review Button */}
+                            {(userRole === 'Admin' || userRole === 'Committee Member') && (
+                              <div className="pt-2 border-t border-slate-100 flex justify-end">
+                                <button
+                                  onClick={() => {
+                                    setActiveKycReviewTenant(t);
+                                    setKycRemarksInput(t.Remarks || '');
+                                  }}
+                                  className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg text-[9px] font-bold cursor-pointer transition-colors border border-purple-200 flex items-center gap-1"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  <span>Review & Audit KYC</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ----------------- TABS: PARKING & VEHICLES REGISTER ----------------- */}
+                {currentTab === 'parking' && (
+                  <div className="space-y-3">
+                    {/* Header */}
+                    <div className="flex justify-between items-center px-0.5">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5">
+                          <Car className="w-4 h-4 text-indigo-600" />
+                          Vehicle & Guest Parking Register
+                        </h3>
+                        <p className="text-[9px] text-slate-400 font-medium">License plates, slot allocations & visitor parking passes</p>
+                      </div>
+                    </div>
+
+                    {/* Sub-tab Switcher */}
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                      <button
+                        onClick={() => setParkingSubTab('resident')}
+                        className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-lg transition-all text-center ${
+                          parkingSubTab === 'resident'
+                            ? 'bg-white text-indigo-700 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        🚘 Resident Vehicles ({vehicles.filter(v => !v.SocietyId || v.SocietyId === activeSocietyId).length})
+                      </button>
+                      <button
+                        onClick={() => setParkingSubTab('guest')}
+                        className={`flex-1 py-1.5 text-[10px] font-extrabold rounded-lg transition-all text-center ${
+                          parkingSubTab === 'guest'
+                            ? 'bg-white text-indigo-700 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-700'
+                        }`}
+                      >
+                        🎫 Guest Parking Passes ({guestParkings.filter(g => (!g.SocietyId || g.SocietyId === activeSocietyId) && g.Status === 'Active').length})
+                      </button>
+                    </div>
+
+                    {/* SUB-TAB 1: RESIDENT VEHICLES */}
+                    {parkingSubTab === 'resident' && (
+                      <div className="space-y-2.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] uppercase font-bold text-slate-400">REGISTERED FLATS FLEET</span>
+                          <button
+                            onClick={() => {
+                              setNewVehFlatNo(userRole === 'Member' ? loggedInMemberFlat : '');
+                              setNewVehOwnerName(activeResidentMember.OwnerName || '');
+                              setNewVehNo('');
+                              setNewVehType('4-Wheeler');
+                              setNewVehSlotNo('');
+                              setNewVehStickerIssued(true);
+                              setShowAddVehicleModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black tracking-wide transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Add Vehicle</span>
+                          </button>
+                        </div>
+
+                        {/* Vehicles List */}
+                        <div className="space-y-2">
+                          {(() => {
+                            const filtered = vehicles.filter(v => {
+                              if (v.SocietyId && v.SocietyId !== activeSocietyId) return false;
+                              if (userRole === 'Member' && v.FlatNo !== loggedInMemberFlat) return false;
+                              if (searchQuery) {
+                                const q = searchQuery.toLowerCase();
+                                return v.VehicleNo.toLowerCase().includes(q) || v.FlatNo.toLowerCase().includes(q) || v.OwnerName.toLowerCase().includes(q);
+                              }
+                              return true;
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-250 text-slate-400">
+                                  <Car className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                  <p className="text-xs font-semibold">No resident vehicles registered</p>
+                                </div>
+                              );
+                            }
+
+                            return filtered.map((v) => (
+                              <div key={v.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between hover:border-indigo-300 transition-colors">
+                                <div className="flex items-center gap-3">
+                                  {/* Metallic Plate Tag */}
+                                  <div className="inline-flex items-center gap-1 bg-yellow-50 text-slate-900 border-2 border-slate-800 rounded px-2 py-1 text-[10px] font-black font-mono shadow-3xs uppercase shrink-0">
+                                    <Car className="w-3 h-3 text-slate-700" />
+                                    <span>{v.VehicleNo}</span>
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-[10px] font-black text-slate-800">Flat {v.FlatNo}</span>
+                                      <span className="text-[8px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded font-bold">
+                                        {v.VehicleType}
+                                      </span>
+                                    </div>
+                                    <p className="text-[9px] text-slate-400 font-semibold truncate">{v.OwnerName}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                      {v.SlotNo && (
+                                        <span className="text-[8px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-100">
+                                          Slot: {v.SlotNo}
+                                        </span>
+                                      )}
+                                      {v.StickerIssued && (
+                                        <span className="text-[7px] font-black text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-100">
+                                          STICKER ISSUED
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {(userRole === 'Admin' || userRole === 'Committee Member') && onDeleteVehicle && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Remove vehicle ${v.VehicleNo}?`)) {
+                                        onDeleteVehicle(v.id);
+                                        triggerToast(`Removed vehicle ${v.VehicleNo}`);
+                                      }
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors"
+                                    title="Delete Vehicle"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SUB-TAB 2: GUEST PARKING PASSES */}
+                    {parkingSubTab === 'guest' && (
+                      <div className="space-y-2.5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] uppercase font-bold text-slate-400">VISITOR PARKING PERMITS</span>
+                          <button
+                            onClick={() => {
+                              setNewGPassFlatNo(userRole === 'Member' ? loggedInMemberFlat : '');
+                              setNewGPassGuestName('');
+                              setNewGPassVehNo('');
+                              setNewGPassVehType('4-Wheeler');
+                              setNewGPassSlot('Visitor Slot V-01');
+                              setNewGPassValidFrom(new Date().toISOString().split('T')[0]);
+                              setNewGPassValidUntil(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+                              setShowAddGuestParkingModal(true);
+                            }}
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[9px] font-black tracking-wide transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Issue Guest Pass</span>
+                          </button>
+                        </div>
+
+                        {/* Guest Passes List */}
+                        <div className="space-y-2">
+                          {(() => {
+                            const filtered = guestParkings.filter(g => {
+                              if (g.SocietyId && g.SocietyId !== activeSocietyId) return false;
+                              if (userRole === 'Member' && g.FlatNo !== loggedInMemberFlat) return false;
+                              return true;
+                            });
+
+                            if (filtered.length === 0) {
+                              return (
+                                <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-250 text-slate-400">
+                                  <ParkingSquare className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                                  <p className="text-xs font-semibold">No active guest parking passes</p>
+                                </div>
+                              );
+                            }
+
+                            return filtered.map((g) => (
+                              <div key={g.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2 hover:border-indigo-300 transition-colors">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <span className="text-[8px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-1.5 py-0.5 rounded font-black uppercase">
+                                      Slot {g.AssignedSlot}
+                                    </span>
+                                    <h4 className="text-xs font-black text-slate-800 mt-1">{g.GuestName}</h4>
+                                    <p className="text-[9px] text-slate-400 font-semibold">Host Flat {g.FlatNo} • {g.GuestVehicleNo}</p>
+                                  </div>
+
+                                  <div className="text-right">
+                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border ${
+                                      g.Status === 'Active'
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                                    }`}>
+                                      {g.Status}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-between items-center pt-1 border-t border-slate-100 text-[8px] text-slate-500 font-semibold">
+                                  <span>Valid: {g.ValidFrom} to {g.ValidUntil}</span>
+                                  {g.Status === 'Active' && onUpdateGuestParkingStatus && (
+                                    <button
+                                      onClick={() => {
+                                        onUpdateGuestParkingStatus(g.id, 'Completed');
+                                        triggerToast(`Guest pass completed & slot vacated`);
+                                      }}
+                                      className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold cursor-pointer transition-colors"
+                                    >
+                                      Vacate Slot
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ----------------- TABS: DOCUMENTS REPOSITORY (TIER 2) ----------------- */}
+                {currentTab === 'documents' && (
+                  <div className="space-y-3 relative pb-10">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-blue-600" /> Society Document Vault
+                        </h3>
+                        <p className="text-[9px] text-slate-400 font-medium">Centralized circulars, AGM minutes & legal records</p>
+                      </div>
+                      {userRole === 'Admin' && (
+                        <button
+                          onClick={() => {
+                            setNewDocTitle('');
+                            setNewDocFileName('');
+                            setNewDocUrl('');
+                            setNewDocNotes('');
+                            setNewDocIsPublic(true);
+                            setShowAddDocModal(true);
+                          }}
+                          className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-lg text-[9.5px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Upload Doc
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Chips */}
+                    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+                      {['All', 'Legal Documents', 'AGM Minutes', 'Financial Audits', 'Building Rules', 'Circulars'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setDocFilterCategory(cat)}
+                          className={`px-2.5 py-1 text-[9px] font-extrabold rounded-full border transition-all whitespace-nowrap cursor-pointer ${
+                            docFilterCategory === cat
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Document List */}
+                    <div className="space-y-2">
+                      {(() => {
+                        const filteredDocs = societyDocuments.filter(d => {
+                          if (d.SocietyId && activeSocietyId && d.SocietyId !== activeSocietyId) return false;
+                          if (docFilterCategory !== 'All' && d.Category !== docFilterCategory) return false;
+                          if (userRole === 'Member' && !d.IsPublic) return false;
+                          return true;
+                        });
+
+                        if (filteredDocs.length === 0) {
+                          return (
+                            <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-250 text-slate-400 space-y-2">
+                              <FolderKanban className="w-9 h-9 mx-auto text-slate-300" />
+                              <p className="text-xs font-bold">No documents found</p>
+                              <p className="text-[9px] text-slate-400">Select another category or upload new records</p>
+                            </div>
+                          );
+                        }
+
+                        return filteredDocs.map((doc) => (
+                          <div key={doc.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 hover:border-blue-300 transition-colors">
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center shrink-0">
+                                  <FileText className="w-4 h-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-xs font-bold text-slate-900 leading-tight truncate">{doc.Title}</h4>
+                                  <p className="text-[8.5px] text-slate-400 font-semibold mt-0.5">
+                                    {doc.Category} • Uploaded {doc.UploadDate} {doc.UploadedBy ? `by ${doc.UploadedBy}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase shrink-0 border ${
+                                doc.IsPublic 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {doc.IsPublic ? 'Public Access' : 'Committee Only'}
+                              </span>
+                            </div>
+
+                            {doc.Notes && (
+                              <p className="text-[9px] text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                {doc.Notes}
+                              </p>
+                            )}
+
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[9px]">
+                              <span className="text-slate-400 font-mono font-medium">{doc.FileName || 'Document.pdf'} ({doc.FileSize || '1.2 MB'})</span>
+
+                              <div className="flex items-center gap-1.5">
+                                {userRole === 'Admin' && onToggleDocumentVisibility && (
+                                  <button
+                                    onClick={() => {
+                                      onToggleDocumentVisibility(doc.id, !doc.IsPublic);
+                                      triggerToast(`Document set to ${!doc.IsPublic ? 'Public' : 'Private'}`);
+                                    }}
+                                    className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[8.5px] flex items-center gap-1 transition-colors cursor-pointer"
+                                    title="Toggle Public/Private"
+                                  >
+                                    {doc.IsPublic ? <EyeOff className="w-3 h-3 text-amber-600" /> : <Eye className="w-3 h-3 text-emerald-600" />}
+                                    {doc.IsPublic ? 'Make Private' : 'Make Public'}
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => setPreviewingSocietyDoc(doc)}
+                                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[8.5px] flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" /> Preview
+                                </button>
+
+                                {userRole === 'Admin' && onDeleteSocietyDocument && (
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Delete document "${doc.Title}"?`)) {
+                                        onDeleteSocietyDocument(doc.id);
+                                        triggerToast(`Document deleted`);
+                                      }
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                    title="Delete document"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ----------------- TABS: LIFT & AMC REGISTER (TIER 2) ----------------- */}
+                {currentTab === 'amc' && (
+                  <div className="space-y-3 relative pb-10">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <Wrench className="w-3.5 h-3.5 text-teal-600" /> Lift Maintenance & AMC Register
+                        </h3>
+                        <p className="text-[9px] text-slate-400 font-medium">Technician contacts, expiry alerts & servicing history</p>
+                      </div>
+                      {userRole === 'Admin' && (
+                        <button
+                          onClick={() => {
+                            setNewAmcAssetName('');
+                            setNewAmcVendorName('');
+                            setNewAmcTechName('');
+                            setNewAmcTechContact('');
+                            setNewAmcStartDate(new Date().toISOString().split('T')[0]);
+                            setNewAmcExpiryDate(new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0]);
+                            setNewAmcNextDue(new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0]);
+                            setShowAddAmcModal(true);
+                          }}
+                          className="px-2.5 py-1 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-lg text-[9.5px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> New AMC
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Category Chips */}
+                    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none">
+                      {['All', 'Lift / Elevator', 'Diesel Generator', 'Water Pump', 'Fire Safety System', 'CCTV & Gate'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setAmcFilterCategory(cat)}
+                          className={`px-2.5 py-1 text-[9px] font-extrabold rounded-full border transition-all whitespace-nowrap cursor-pointer ${
+                            amcFilterCategory === cat
+                              ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* AMC Cards List */}
+                    <div className="space-y-2.5">
+                      {(() => {
+                        const filteredAmcs = assetAMCs.filter(a => {
+                          if (a.SocietyId && activeSocietyId && a.SocietyId !== activeSocietyId) return false;
+                          if (amcFilterCategory !== 'All' && a.Category !== amcFilterCategory) return false;
+                          return true;
+                        });
+
+                        if (filteredAmcs.length === 0) {
+                          return (
+                            <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-250 text-slate-400 space-y-2">
+                              <Wrench className="w-9 h-9 mx-auto text-slate-300" />
+                              <p className="text-xs font-bold">No AMC Contracts Found</p>
+                              <p className="text-[9px] text-slate-400">Add maintenance contracts for lifts, generators, and pumps</p>
+                            </div>
+                          );
+                        }
+
+                        return filteredAmcs.map((item) => {
+                          // Expiry logic check (within 60 days)
+                          const today = new Date();
+                          const expDate = new Date(item.ContractExpiryDate);
+                          const daysToExpiry = Math.ceil((expDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+                          const isExpiringSoon = daysToExpiry <= 60 && daysToExpiry >= 0;
+                          const isExpired = daysToExpiry < 0;
+
+                          return (
+                            <div key={item.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 hover:border-teal-300 transition-colors">
+                              <div className="flex justify-between items-start gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-black text-slate-900">{item.AssetName}</h4>
+                                    <span className="text-[8px] bg-teal-50 text-teal-700 border border-teal-100 px-1.5 py-0.2 rounded font-extrabold uppercase">
+                                      {item.Category}
+                                    </span>
+                                  </div>
+                                  <p className="text-[9px] text-slate-500 font-medium mt-0.5">AMC Vendor: <span className="font-bold text-slate-700">{item.VendorName}</span></p>
+                                </div>
+
+                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${
+                                  item.Status === 'Operational'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : (item.Status === 'Under Maintenance' ? 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse' : 'bg-amber-50 text-amber-700 border-amber-200')
+                                }`}>
+                                  {item.Status}
+                                </span>
+                              </div>
+
+                              {/* AMC Expiration Alert Badge if <= 60 days */}
+                              {(isExpiringSoon || isExpired) && (
+                                <div className={`p-2 rounded-xl text-[9px] font-bold flex items-center gap-1.5 border ${
+                                  isExpired ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                                }`}>
+                                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                  <span>
+                                    {isExpired ? `⚠️ AMC Contract Expired on ${item.ContractExpiryDate}!` : `⚠️ AMC Expires in ${daysToExpiry} days (${item.ContractExpiryDate}). Renew Contract.`}
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="grid grid-cols-2 gap-2 text-[9px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+                                <div>
+                                  <span className="text-slate-400 block font-semibold">Contract Validity</span>
+                                  <span className="font-bold text-slate-700">{item.ContractStartDate} to {item.ContractExpiryDate}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 block font-semibold">Next Service Due</span>
+                                  <span className="font-bold text-teal-700">{item.NextServiceDueDate || 'As per schedule'}</span>
+                                </div>
+                              </div>
+
+                              {/* Technician Details & Direct Tap-to-Call */}
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[9px]">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <div className="min-w-0">
+                                    <span className="font-bold text-slate-800 truncate block">{item.TechnicianName}</span>
+                                    <span className="text-slate-400 text-[8px] font-mono">{item.TechnicianContact}</span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5">
+                                  <a
+                                    href={`tel:${item.TechnicianContact}`}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[8.5px] flex items-center gap-1 shadow-2xs transition-colors"
+                                  >
+                                    <PhoneCall className="w-3 h-3" /> Call Tech
+                                  </a>
+
+                                  {userRole === 'Admin' && (
+                                    <button
+                                      onClick={() => {
+                                        setShowServiceLogModal(item);
+                                        setServiceNotes(item.Remarks || '');
+                                      }}
+                                      className="px-2 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 font-bold rounded-lg text-[8.5px] border border-teal-200 transition-colors cursor-pointer"
+                                    >
+                                      Log Service
+                                    </button>
+                                  )}
+
+                                  {userRole === 'Admin' && onDeleteAssetAMC && (
+                                    <button
+                                      onClick={() => {
+                                        if (confirm(`Delete AMC entry for "${item.AssetName}"?`)) {
+                                          onDeleteAssetAMC(item.id);
+                                          triggerToast(`AMC entry removed`);
+                                        }
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {/* ----------------- TABS: WATER METERS & TANK CLEANING (TIER 2) ----------------- */}
+                {currentTab === 'watermeters' && (
+                  <div className="space-y-3 relative pb-10">
+                    <div className="flex justify-between items-center px-0.5">
+                      <div>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <Droplets className="w-3.5 h-3.5 text-cyan-600" /> Water Infrastructure Register
+                        </h3>
+                        <p className="text-[9px] text-slate-400 font-medium">Flat meters, consumption graphs & quarterly tank logs</p>
+                      </div>
+                    </div>
+
+                    {/* Sub Tab Switcher: Water Meters vs Water Tank Cleaning */}
+                    <div className="grid grid-cols-2 bg-slate-100 p-1 rounded-xl gap-1">
+                      <button
+                        onClick={() => setWaterSubTab('meters')}
+                        className={`py-1.5 text-[9.5px] font-black rounded-lg transition-all cursor-pointer ${
+                          waterSubTab === 'meters'
+                            ? 'bg-white text-cyan-700 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        💧 Meter Consumption
+                      </button>
+                      <button
+                        onClick={() => setWaterSubTab('tanks')}
+                        className={`py-1.5 text-[9.5px] font-black rounded-lg transition-all cursor-pointer ${
+                          waterSubTab === 'tanks'
+                            ? 'bg-white text-cyan-700 shadow-2xs'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        🛢️ Tank Cleaning Log
+                      </button>
+                    </div>
+
+                    {/* SUB-TAB 1: WATER METER READINGS & CONSUMPTION */}
+                    {waterSubTab === 'meters' && (
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs">
+                          <div>
+                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider block">Billing Period</span>
+                            <select
+                              value={waterReadingMonth}
+                              onChange={(e) => setWaterReadingMonth(e.target.value)}
+                              className="text-xs font-black text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+                            >
+                              <option value="July 2026">July 2026</option>
+                              <option value="June 2026">June 2026</option>
+                              <option value="May 2026">May 2026</option>
+                            </select>
+                          </div>
+
+                          {userRole === 'Admin' && (
+                            <button
+                              onClick={() => {
+                                // Initialize batch inputs from current members list
+                                const initial = members.map(m => {
+                                  const existing = waterMeters.find(wm => wm.FlatNo === m.FlatNo && wm.ReadingMonth === waterReadingMonth);
+                                  return {
+                                    flatNo: m.FlatNo,
+                                    currentReading: existing ? String(existing.CurrentReading) : String((existing?.PreviousReading || 120) + 15),
+                                    prevReading: existing ? existing.PreviousReading : 120,
+                                    unitRate: existing ? existing.UnitRate : 12
+                                  };
+                                });
+                                setBatchMeterReadings(initial);
+                                setShowBatchWaterMeterModal(true);
+                              }}
+                              className="px-2.5 py-1.5 bg-cyan-600 hover:bg-cyan-700 active:scale-95 text-white rounded-xl text-[9.5px] font-bold flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Batch Monthly Entry
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Consumption Summary Stats */}
+                        {(() => {
+                          const currentMeters = waterMeters.filter(wm => {
+                            if (wm.SocietyId && activeSocietyId && wm.SocietyId !== activeSocietyId) return false;
+                            return wm.ReadingMonth === waterReadingMonth;
+                          });
+
+                          const totalConsumption = currentMeters.reduce((acc, curr) => acc + (curr.ConsumedUnits || 0), 0);
+                          const totalCharges = currentMeters.reduce((acc, curr) => acc + (curr.TotalCharge || 0), 0);
+                          const avgPerFlat = currentMeters.length > 0 ? Math.round(totalConsumption / currentMeters.length) : 0;
+
+                          return (
+                            <div className="grid grid-cols-3 gap-2">
+                              <div className="bg-cyan-50/80 p-2.5 rounded-2xl border border-cyan-150 text-center">
+                                <span className="text-[8px] font-bold text-cyan-800 uppercase block">Total Consumed</span>
+                                <span className="text-xs font-black text-cyan-900 mt-0.5 block">{totalConsumption} Units</span>
+                              </div>
+                              <div className="bg-blue-50/80 p-2.5 rounded-2xl border border-blue-150 text-center">
+                                <span className="text-[8px] font-bold text-blue-800 uppercase block">Avg / Flat</span>
+                                <span className="text-xs font-black text-blue-900 mt-0.5 block">{avgPerFlat} Units</span>
+                              </div>
+                              <div className="bg-emerald-50/80 p-2.5 rounded-2xl border border-emerald-150 text-center">
+                                <span className="text-[8px] font-bold text-emerald-800 uppercase block">Est. Charges</span>
+                                <span className="text-xs font-black text-emerald-900 mt-0.5 block">₹{totalCharges.toLocaleString()}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        {/* Recharts Bar Chart: Water Consumption Comparison */}
+                        <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Flat Consumption Chart (Units)</span>
+                          <div className="h-40 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart
+                                data={waterMeters
+                                  .filter(wm => (!wm.SocietyId || wm.SocietyId === activeSocietyId) && wm.ReadingMonth === waterReadingMonth)
+                                  .map(wm => ({
+                                    Flat: `Flat ${wm.FlatNo}`,
+                                    Units: wm.ConsumedUnits || 0
+                                  }))}
+                                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="Flat" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                                <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: '#0f172a', borderRadius: '8px', color: '#fff', fontSize: '10px' }}
+                                />
+                                <Bar dataKey="Units" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Individual Flat Meter Cards */}
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block px-0.5">Flat Water Meter Breakdown</span>
+                          {(() => {
+                            const filteredMeters = waterMeters.filter(wm => {
+                              if (wm.SocietyId && activeSocietyId && wm.SocietyId !== activeSocietyId) return false;
+                              if (wm.ReadingMonth !== waterReadingMonth) return false;
+                              if (userRole === 'Member' && loggedInMemberFlat && wm.FlatNo !== loggedInMemberFlat) return false;
+                              return true;
+                            });
+
+                            if (filteredMeters.length === 0) {
+                              return (
+                                <div className="text-center py-8 bg-white rounded-2xl border border-dashed border-slate-250 text-slate-400">
+                                  <p className="text-xs font-bold">No readings recorded for {waterReadingMonth}</p>
+                                </div>
+                              );
+                            }
+
+                            return filteredMeters.map((wm) => (
+                              <div key={wm.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs flex items-center justify-between">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-xs font-black text-slate-800">Flat {wm.FlatNo}</h4>
+                                    <span className="text-[8px] font-mono text-slate-400">MTR: {wm.MeterSerialNo}</span>
+                                  </div>
+                                  <p className="text-[9px] text-slate-500 font-medium mt-0.5">
+                                    Readings: <span className="font-semibold text-slate-700">{wm.PreviousReading} → {wm.CurrentReading}</span>
+                                  </p>
+                                </div>
+
+                                <div className="text-right">
+                                  <span className="text-xs font-black text-cyan-700 block">{wm.ConsumedUnits} Units</span>
+                                  <span className="text-[8.5px] font-extrabold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                    ₹{wm.TotalCharge} (@ ₹{wm.UnitRate}/unit)
+                                  </span>
+                                </div>
+                              </div>
+                            ));
+                          })()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SUB-TAB 2: WATER TANK CLEANING LOG */}
+                    {waterSubTab === 'tanks' && (
+                      <div className="space-y-3">
+                        <div className="bg-gradient-to-r from-cyan-600 to-blue-600 p-3.5 rounded-2xl text-white shadow-xs space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-[8px] uppercase tracking-wider font-extrabold text-cyan-200">QUARTERLY & BI-ANNUAL HYGIENE</span>
+                              <h4 className="text-sm font-black mt-0.5">Water Tank Maintenance Schedule</h4>
+                            </div>
+                            {userRole === 'Admin' && (
+                              <button
+                                onClick={() => {
+                                  setTankName('Overhead Tank A');
+                                  setTankCapacity('50,000 Liters');
+                                  setTankVendor('AquaClean Services');
+                                  setTankLastCleaned(new Date().toISOString().split('T')[0]);
+                                  setTankNextDue(new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0]);
+                                  setShowAddTankCleaningModal(true);
+                                }}
+                                className="px-2.5 py-1 bg-white text-cyan-800 hover:bg-cyan-50 text-[9px] font-black rounded-lg shadow-2xs transition-colors cursor-pointer"
+                              >
+                                + Log Cleaning
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[9.5px] text-cyan-100 leading-relaxed">
+                            Maintain clean overhead tanks and underground sumps according to municipal health regulations.
+                          </p>
+                        </div>
+
+                        {/* Tank Records List */}
+                        <div className="space-y-2.5">
+                          {[
+                            { name: 'Overhead Tank - Wing A & B', type: 'Overhead Tank', capacity: '50,000 Liters', last: '2026-06-15', next: '2026-09-15', vendor: 'AquaClean Tech', status: 'Cleaned' },
+                            { name: 'Overhead Tank - Wing C & D', type: 'Overhead Tank', capacity: '50,000 Liters', last: '2026-06-15', next: '2026-09-15', vendor: 'AquaClean Tech', status: 'Cleaned' },
+                            { name: 'Underground Main Sump A', type: 'Underground Sump', capacity: '1,20,000 Liters', last: '2026-04-10', next: '2026-07-30', vendor: 'HydroCare Services', status: 'Due Soon' }
+                          ].map((tank, idx) => (
+                            <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h4 className="text-xs font-black text-slate-900">{tank.name}</h4>
+                                  <p className="text-[9px] text-slate-400 font-semibold mt-0.5">Capacity: {tank.capacity} • Vendor: {tank.vendor}</p>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${
+                                  tank.status === 'Cleaned' 
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                    : 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                                }`}>
+                                  {tank.status}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 text-[9px] bg-slate-50 p-2 rounded-xl border border-slate-100">
+                                <div>
+                                  <span className="text-slate-400 font-semibold block">Last Serviced Date</span>
+                                  <span className="font-bold text-slate-700">{tank.last}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-400 font-semibold block">Next Due Date</span>
+                                  <span className="font-bold text-cyan-700">{tank.next}</span>
+                                </div>
+                              </div>
+
+                              {/* Admin Action: Broadcast Cleaning Notice to Bulletin */}
+                              {userRole === 'Admin' && onAddNotice && (
+                                <button
+                                  onClick={() => {
+                                    onAddNotice({
+                                      title: `Water Tank Cleaning Scheduled: ${tank.name}`,
+                                      category: 'Maintenance',
+                                      content: `Dear Residents, quarterly water tank cleaning for ${tank.name} is scheduled for ${tank.next}. Water supply may be restricted between 10 AM and 2 PM. Please store sufficient water.`,
+                                      uploadedBy: 'Secretary / Management Committee'
+                                    });
+                                    triggerToast(`Cleaning notice broadcasted to residents!`);
+                                  }}
+                                  className="w-full py-1.5 bg-cyan-50 hover:bg-cyan-100 text-cyan-800 border border-cyan-200 font-bold rounded-xl text-[9px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                >
+                                  <Megaphone className="w-3 h-3 text-cyan-600" /> Broadcast Notice to Bulletin Board
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Bottom Navigation Tabs */}
-              <div className="h-[56px] bg-white border-t border-slate-200 flex items-center justify-around px-1 py-1 z-30">
+              <div className={`h-[56px] border-t flex items-center gap-1 overflow-x-auto px-1 py-1 z-30 scrollbar-none transition-colors ${
+                isDark ? 'bg-slate-900 border-slate-800 text-slate-400' : 'bg-white border-slate-200 text-slate-500'
+              }`}>
                 <button 
                   onClick={() => setCurrentTab('dashboard')}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'dashboard' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                    currentTab === 'dashboard' 
+                      ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                      : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                  }`}
                 >
                   <BarChart3 className="w-4 h-4" />
-                  <span className="text-[8px]">Dashboard</span>
+                  <span className="text-[8px] whitespace-nowrap">Home</span>
                 </button>
+
+                <button 
+                  onClick={() => setCurrentTab('emergency')}
+                  className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                    currentTab === 'emergency' 
+                      ? (isDark ? 'text-rose-400 font-extrabold' : 'text-rose-600 font-extrabold') 
+                      : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                  }`}
+                >
+                  <PhoneCall className="w-4 h-4" />
+                  <span className="text-[8px] whitespace-nowrap">SOS / Help</span>
+                </button>
+
+                {activeFeatures.tenantRegister !== false && (
+                  <button 
+                    onClick={() => setCurrentTab('tenants')}
+                    className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                      currentTab === 'tenants' 
+                        ? (isDark ? 'text-amber-400 font-extrabold' : 'text-amber-600 font-extrabold') 
+                        : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                    }`}
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span className="text-[8px] whitespace-nowrap">Tenants</span>
+                  </button>
+                )}
+
+                {activeFeatures.parkingRegister !== false && (
+                  <button 
+                    onClick={() => setCurrentTab('parking')}
+                    className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                      currentTab === 'parking' 
+                        ? (isDark ? 'text-indigo-400 font-extrabold' : 'text-indigo-600 font-extrabold') 
+                        : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                    }`}
+                  >
+                    <Car className="w-4 h-4" />
+                    <span className="text-[8px] whitespace-nowrap">Parking</span>
+                  </button>
+                )}
+
+                {activeFeatures.documentVault !== false && (
+                  <button 
+                    onClick={() => setCurrentTab('documents')}
+                    className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                      currentTab === 'documents' 
+                        ? (isDark ? 'text-blue-400 font-extrabold' : 'text-blue-600 font-extrabold') 
+                        : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                    }`}
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="text-[8px] whitespace-nowrap">Docs</span>
+                  </button>
+                )}
+
+                {activeFeatures.assetAMC !== false && (
+                  <button 
+                    onClick={() => setCurrentTab('amc')}
+                    className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                      currentTab === 'amc' 
+                        ? (isDark ? 'text-teal-400 font-extrabold' : 'text-teal-600 font-extrabold') 
+                        : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                    }`}
+                  >
+                    <Wrench className="w-4 h-4" />
+                    <span className="text-[8px] whitespace-nowrap">AMC</span>
+                  </button>
+                )}
+
+                {activeFeatures.waterMeters !== false && (
+                  <button 
+                    onClick={() => setCurrentTab('watermeters')}
+                    className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                      currentTab === 'watermeters' 
+                        ? (isDark ? 'text-cyan-400 font-extrabold' : 'text-cyan-600 font-extrabold') 
+                        : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                    }`}
+                  >
+                    <Droplets className="w-4 h-4" />
+                    <span className="text-[8px] whitespace-nowrap">Water</span>
+                  </button>
+                )}
 
                 {userRole === 'Admin' ? (
                   <>
                     <button 
                       onClick={() => { setCurrentTab('members'); setSearchQuery(''); }}
-                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'members' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                        currentTab === 'members' 
+                          ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                      }`}
                     >
                       <Users className="w-4 h-4" />
-                      <span className="text-[8px]">Members</span>
+                      <span className="text-[8px] whitespace-nowrap">Members</span>
                     </button>
 
                     <button 
                       onClick={() => setCurrentTab('payments')}
-                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'payments' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                        currentTab === 'payments' 
+                          ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                      }`}
                     >
                       <CreditCard className="w-4 h-4" />
-                      <span className="text-[8px]">Payments</span>
+                      <span className="text-[8px] whitespace-nowrap">Payments</span>
                     </button>
 
                     <button 
                       onClick={() => setCurrentTab('expenses')}
-                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'expenses' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                        currentTab === 'expenses' 
+                          ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                      }`}
                     >
                       <TrendingDown className="w-4 h-4" />
-                      <span className="text-[8px]">Expenses</span>
+                      <span className="text-[8px] whitespace-nowrap">Expenses</span>
                     </button>
                   </>
                 ) : (
                   <>
                     <button 
                       onClick={() => setCurrentTab('payments')}
-                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'payments' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                        currentTab === 'payments' 
+                          ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                      }`}
                     >
                       <CreditCard className="w-4 h-4" />
-                      <span className="text-[8px]">My Ledger</span>
+                      <span className="text-[8px] whitespace-nowrap">My Ledger</span>
                     </button>
 
                     <button 
                       onClick={() => setCurrentTab('amenities')}
-                      className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'amenities' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                      className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                        currentTab === 'amenities' 
+                          ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                          : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                      }`}
                     >
                       <Calendar className="w-4 h-4" />
-                      <span className="text-[8px]">Amenities</span>
+                      <span className="text-[8px] whitespace-nowrap">Amenities</span>
                     </button>
                   </>
                 )}
 
                 <button 
                   onClick={() => { setCurrentTab('complaints'); setComplaintFilter('All'); }}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'complaints' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                    currentTab === 'complaints' 
+                      ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                      : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                  }`}
                 >
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="text-[8px]">Alerts</span>
+                  <span className="text-[8px] whitespace-nowrap">Alerts</span>
                 </button>
 
                 <button 
                   onClick={() => setCurrentTab('notices')}
-                  className={`flex flex-col items-center gap-0.5 flex-1 py-1 ${currentTab === 'notices' ? 'text-purple-600 font-semibold' : 'text-slate-400 hover:text-slate-600'}`}
+                  className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                    currentTab === 'notices' 
+                      ? (isDark ? 'text-purple-400 font-extrabold' : 'text-purple-600 font-extrabold') 
+                      : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600')
+                  }`}
                 >
                   <Megaphone className="w-4 h-4" />
-                  <span className="text-[8px]">Notices</span>
+                  <span className="text-[8px] whitespace-nowrap">Notices</span>
                 </button>
               </div>
 
               {/* Home Indicator Gesture Bar */}
-              <div className="h-4 bg-white flex justify-center items-center">
-                <div className="w-28 h-1 bg-slate-300 rounded-full"></div>
+              <div className={`h-4 flex justify-center items-center ${isDark ? 'bg-slate-900' : 'bg-white'}`}>
+                <div className={`w-28 h-1 rounded-full ${isDark ? 'bg-slate-700' : 'bg-slate-300'}`}></div>
               </div>
             </div>
           )}
@@ -4543,29 +6337,25 @@ export default function MobileSimulator({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div 
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          // Simulating drop file
-                          setNewNoticeFileName('Uploaded_Circular_Notice.pdf');
-                          setNewNoticeFileSize('1.2 MB');
-                          setNewNoticeFileUrl('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
-                          triggerToast('Document "Uploaded_Circular_Notice.pdf" successfully attached!');
+                      <FileUpload
+                        label="Attach Notice Circular / PDF Document"
+                        bucket="notice-attachments"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        currentUrl={newNoticeFileUrl}
+                        currentFileName={newNoticeFileName}
+                        onUploadSuccess={(res) => {
+                          setNewNoticeFileUrl(res.url);
+                          setNewNoticeFileName(res.fileName);
+                          setNewNoticeFileSize(res.fileSize);
+                          triggerToast(`Circular PDF "${res.fileName}" uploaded to 'notice-attachments' bucket!`);
                         }}
-                        className="border border-dashed border-slate-300 hover:border-purple-400 hover:bg-purple-50/10 rounded-xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1 bg-slate-50"
-                        onClick={() => {
-                          // Allow choosing from templates
-                          setNewNoticeFileName('AGM_Meeting_Agenda_Circular.pdf');
-                          setNewNoticeFileSize('820 KB');
-                          setNewNoticeFileUrl('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
-                          triggerToast('Document "AGM_Meeting_Agenda_Circular.pdf" successfully attached!');
+                        onClear={() => {
+                          setNewNoticeFileUrl('');
+                          setNewNoticeFileName('');
+                          setNewNoticeFileSize('');
                         }}
-                      >
-                        <Megaphone className="w-6 h-6 text-slate-400 shrink-0" />
-                        <p className="font-bold text-slate-600 text-[10px]">Drag & drop circular document, or click to browse</p>
-                        <p className="text-[8px] text-slate-400 font-semibold">Supports PDF, DOCX, JPG (Max 5MB)</p>
-                      </div>
+                        isDark={isDark}
+                      />
 
                       {/* Standard Template Quick Select */}
                       <div className="flex flex-col gap-1.5 p-2.5 bg-slate-100 rounded-xl border border-slate-200">
@@ -4807,9 +6597,63 @@ export default function MobileSimulator({
                   </div>
                 )}
 
+                {/* Feature Modules Management Section */}
+                <div className="space-y-2 p-3 bg-purple-50/60 border border-purple-200 rounded-xl">
+                  <div className="flex justify-between items-center border-b pb-1.5 border-purple-200/80">
+                    <span className="font-extrabold text-purple-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                      ⚙️ Feature Modules Management
+                    </span>
+                    <span className="text-[8px] bg-purple-200/80 text-purple-800 font-bold px-1.5 py-0.5 rounded">
+                      Toggle Society Modules
+                    </span>
+                  </div>
+
+                  <p className="text-[9px] text-slate-500 font-medium leading-normal">
+                    Enable or disable optional software modules for this society. Disabled features will be hidden from residents and admin screens.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-1.5 text-[10px] pt-1">
+                    {[
+                      { id: 'gatekeeper', label: 'Gatekeeper & Visitor Scanner', icon: '🚪', desc: 'Pre-approve guests, OTP check-in & gate logs' },
+                      { id: 'waterMeters', label: 'Water Meters & Tank Cleaning', icon: '💧', desc: 'Flat water meter billing & tank maintenance' },
+                      { id: 'tenantRegister', label: 'Tenant Register & KYC', icon: '🔑', desc: 'Lease agreement PDF & ID proof verification' },
+                      { id: 'amenities', label: 'Clubhouse & Amenity Booking', icon: '📅', desc: 'Facility slot reservations & payment tracking' },
+                      { id: 'assetAMC', label: 'Asset & Lift AMC Register', icon: '🛠️', desc: 'Equipment maintenance, service bills & expiry alerts' },
+                      { id: 'parkingRegister', label: 'Vehicle & Parking Register', icon: '🚗', desc: 'Resident vehicle slots & guest parking passes' },
+                      { id: 'documentVault', label: 'Document Vault & Repository', icon: '📂', desc: 'AGM minutes, audit statements & bylaws' }
+                    ].map(feat => {
+                      const key = feat.id as keyof FeatureFlags;
+                      const isEnabled = tempFeatures[key] !== false;
+                      return (
+                        <label key={feat.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-50/50 transition-colors shadow-3xs">
+                          <div className="flex items-center gap-2 min-w-0 pr-2">
+                            <span className="text-sm shrink-0">{feat.icon}</span>
+                            <div className="min-w-0">
+                              <p className="font-extrabold text-slate-800 text-[9.5px] leading-tight">{feat.label}</p>
+                              <p className="text-[8px] text-slate-400 font-semibold truncate mt-0.5">{feat.desc}</p>
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={isEnabled}
+                            onChange={(e) => {
+                              setTempFeatures({
+                                ...tempFeatures,
+                                [key]: e.target.checked
+                              });
+                            }}
+                            className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer shrink-0"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-all"
+                  id="save-society-config-btn"
                 >
                   Save Society Configurations
                 </button>
@@ -5154,6 +6998,1562 @@ export default function MobileSimulator({
                 <p className="text-[8px] text-slate-400 text-center italic">
                   Note: This transaction is completely simulated within the Sandbox sandbox and no real funds are moved.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* ============================================================== */}
+          {/* ======================= TIER 1 MODALS ======================== */}
+          {/* ============================================================== */}
+
+          {/* 1. Add / Edit Emergency Contact Modal */}
+          {showAddEmergencyModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-5 space-y-3.5 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-5 h-5 text-rose-600" />
+                    <h3 className="font-extrabold text-slate-800">
+                      {editingEmergContact ? 'Edit Emergency Contact' : 'Add New Emergency Helpline'}
+                    </h3>
+                  </div>
+                  <button onClick={() => setShowAddEmergencyModal(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newEmergName.trim() || !newEmergPhone.trim()) {
+                      triggerToast('Please provide contact name and phone number');
+                      return;
+                    }
+                    if (editingEmergContact && onUpdateEmergencyContact) {
+                      onUpdateEmergencyContact(editingEmergContact.id, {
+                        Name: newEmergName.trim(),
+                        Category: newEmergCategory,
+                        Phone: newEmergPhone.trim(),
+                        RoleOrTitle: newEmergRoleTitle.trim()
+                      });
+                      triggerToast('Updated emergency contact');
+                    } else if (onAddEmergencyContact) {
+                      onAddEmergencyContact({
+                        SocietyId: activeSocietyId,
+                        Name: newEmergName.trim(),
+                        Category: newEmergCategory,
+                        Phone: newEmergPhone.trim(),
+                        RoleOrTitle: newEmergRoleTitle.trim(),
+                        IsImportant: newEmergCategory === 'Police' || newEmergCategory === 'Ambulance' || newEmergCategory === 'Fire'
+                      });
+                      triggerToast('Added emergency contact');
+                    }
+                    setShowAddEmergencyModal(false);
+                  }}
+                  className="space-y-2.5"
+                >
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Contact / Service Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. City Police Control Room, Society Gate Security"
+                      value={newEmergName}
+                      onChange={(e) => setNewEmergName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Category</label>
+                      <select
+                        value={newEmergCategory}
+                        onChange={(e) => setNewEmergCategory(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-semibold"
+                      >
+                        <option value="Police">Police</option>
+                        <option value="Ambulance">Ambulance</option>
+                        <option value="Fire">Fire</option>
+                        <option value="Hospital">Hospital</option>
+                        <option value="Security">Security</option>
+                        <option value="Electrician">Electrician</option>
+                        <option value="Plumber">Plumber</option>
+                        <option value="Committee">Committee</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Phone Number</label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 100 or +91 9820012345"
+                        value={newEmergPhone}
+                        onChange={(e) => setNewEmergPhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Role / Designation (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Society Secretary, Senior Inspector, Main Gate Desk"
+                      value={newEmergRoleTitle}
+                      onChange={(e) => setNewEmergRoleTitle(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer mt-2"
+                  >
+                    {editingEmergContact ? 'Save Contact Updates' : 'Publish Helpline Contact'}
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Register Tenant Modal */}
+          {showAddTenantModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-5 space-y-3.5 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <KeyRound className="w-5 h-5 text-amber-600" />
+                    <h3 className="font-extrabold text-slate-800">Register Tenant Mapping</h3>
+                  </div>
+                  <button onClick={() => setShowAddTenantModal(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newTenFlatNo.trim() || !newTenName.trim() || !newTenPhone.trim()) {
+                      triggerToast('Please fill required flat, tenant name and phone number');
+                      return;
+                    }
+                    if (onAddTenant) {
+                      onAddTenant({
+                        SocietyId: activeSocietyId,
+                        FlatNo: newTenFlatNo.trim(),
+                        TenantName: newTenName.trim(),
+                        ContactNo: newTenPhone.trim(),
+                        Email: newTenEmail.trim(),
+                        MoveInDate: newTenMoveIn || new Date().toISOString().split('T')[0],
+                        MoveOutDate: newTenMoveOut,
+                        AgreementDocUrl: newTenAgreementUrl || 'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?auto=format&fit=crop&w=400&q=80',
+                        IdProofUrl: newTenIdProofUrl || 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80',
+                        KycStatus: 'Pending',
+                        Remarks: 'Awaiting committee verification'
+                      });
+                      triggerToast(`Tenant registered for Flat ${newTenFlatNo.trim()}! KYC Pending.`);
+                    }
+                    setShowAddTenantModal(false);
+                  }}
+                  className="space-y-2.5"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Flat Number</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 101"
+                        value={newTenFlatNo}
+                        onChange={(e) => setNewTenFlatNo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs uppercase font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Tenant Full Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Rajesh Kumar"
+                        value={newTenName}
+                        onChange={(e) => setNewTenName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Contact Phone</label>
+                      <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 9820011223"
+                        value={newTenPhone}
+                        onChange={(e) => setNewTenPhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Tenant Email</label>
+                      <input
+                        type="email"
+                        placeholder="tenant@email.com"
+                        value={newTenEmail}
+                        onChange={(e) => setNewTenEmail(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Move-In Date</label>
+                      <input
+                        type="date"
+                        value={newTenMoveIn}
+                        onChange={(e) => setNewTenMoveIn(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Lease Expiry Date</label>
+                      <input
+                        type="date"
+                        value={newTenMoveOut}
+                        onChange={(e) => setNewTenMoveOut(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-2.5">
+                    <span className="text-[10px] font-black uppercase text-amber-800 block">KYC Attachments & Verification Documents</span>
+                    
+                    <FileUpload
+                      label="Upload Rental Lease Agreement PDF"
+                      bucket="tenant-kyc"
+                      accept=".pdf,.doc,.docx,image/*"
+                      currentUrl={newTenAgreementUrl}
+                      onUploadSuccess={(res) => {
+                        setNewTenAgreementUrl(res.url);
+                        triggerToast(`Lease Agreement uploaded to 'tenant-kyc' bucket!`);
+                      }}
+                      onClear={() => setNewTenAgreementUrl('')}
+                      isDark={isDark}
+                    />
+
+                    <FileUpload
+                      label="Upload Police Verification / ID Proof"
+                      bucket="tenant-kyc"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      currentUrl={newTenIdProofUrl}
+                      onUploadSuccess={(res) => {
+                        setNewTenIdProofUrl(res.url);
+                        triggerToast(`Tenant ID Proof uploaded to 'tenant-kyc' bucket!`);
+                      }}
+                      onClear={() => setNewTenIdProofUrl('')}
+                      isDark={isDark}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer mt-2"
+                  >
+                    Submit Tenant & KYC Records
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* 3. Review Tenant KYC Modal (Admin) */}
+          {activeKycReviewTenant && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-5 space-y-3.5 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div>
+                    <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">KYC AUDIT DESK</span>
+                    <h3 className="font-extrabold text-slate-800 mt-1">Flat {activeKycReviewTenant.FlatNo} - {activeKycReviewTenant.TenantName}</h3>
+                  </div>
+                  <button onClick={() => setActiveKycReviewTenant(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Tenant Phone:</span>
+                    <strong className="text-slate-700">{activeKycReviewTenant.ContactNo}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Move-In Date:</span>
+                    <strong className="text-slate-700">{activeKycReviewTenant.MoveInDate}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Current KYC Status:</span>
+                    <strong className="text-amber-700 uppercase font-black">{activeKycReviewTenant.KycStatus}</strong>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-600 block">Auditor / Committee Remarks</label>
+                  <textarea
+                    value={kycRemarksInput}
+                    onChange={(e) => setKycRemarksInput(e.target.value)}
+                    rows={2}
+                    placeholder="Provide audit notes or reasons if rejecting..."
+                    className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onUpdateTenantKyc) {
+                        onUpdateTenantKyc(activeKycReviewTenant.id, 'Verified', kycRemarksInput || 'Verified by Committee');
+                        triggerToast(`KYC Verified for Flat ${activeKycReviewTenant.FlatNo}!`);
+                      }
+                      setActiveKycReviewTenant(null);
+                    }}
+                    className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl shadow cursor-pointer text-center"
+                  >
+                    ✓ Verify & Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onUpdateTenantKyc) {
+                        onUpdateTenantKyc(activeKycReviewTenant.id, 'Rejected', kycRemarksInput || 'Missing police verification proof');
+                        triggerToast(`KYC Marked Rejected for Flat ${activeKycReviewTenant.FlatNo}`);
+                      }
+                      setActiveKycReviewTenant(null);
+                    }}
+                    className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl shadow cursor-pointer text-center"
+                  >
+                    ✕ Reject KYC
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Document Viewer Modal */}
+          {viewingDocModal && (
+            <div className="absolute inset-0 bg-slate-900/80 z-50 flex flex-col">
+              <div className="p-3 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+                <div>
+                  <h4 className="font-extrabold text-xs">{viewingDocModal.title}</h4>
+                  <p className="text-[9px] text-slate-400">{viewingDocModal.label}</p>
+                </div>
+                <button onClick={() => setViewingDocModal(null)} className="p-1 text-slate-400 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 bg-slate-950 p-4 flex flex-col justify-center items-center text-center space-y-3 overflow-y-auto">
+                <div className="w-full max-w-xs bg-white rounded-2xl p-4 shadow-2xl text-slate-800 space-y-3 text-xs">
+                  <div className="w-12 h-12 rounded-full bg-purple-50 text-purple-600 mx-auto flex items-center justify-center">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h5 className="font-black text-sm">{viewingDocModal.title}</h5>
+                    <span className="text-[9px] text-slate-400 block mt-0.5">Encrypted Security Record • Verified</span>
+                  </div>
+
+                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-150 text-[9px] text-slate-600 leading-relaxed text-left">
+                    <p>📄 <strong>Document Summary:</strong> Official KYC submission registered in society cloud vault.</p>
+                    <p className="mt-1 font-mono text-[8px] text-slate-400 break-all">{viewingDocModal.url}</p>
+                  </div>
+
+                  <a
+                    href={viewingDocModal.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white font-extrabold py-2 px-3 rounded-xl block text-center shadow transition-all cursor-pointer text-[10px]"
+                  >
+                    Open Full Document File
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 5. Add Resident Vehicle Modal */}
+          {showAddVehicleModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-5 space-y-3.5 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Car className="w-5 h-5 text-indigo-600" />
+                    <h3 className="font-extrabold text-slate-800">Register Resident Vehicle</h3>
+                  </div>
+                  <button onClick={() => setShowAddVehicleModal(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newVehFlatNo.trim() || !newVehNo.trim()) {
+                      triggerToast('Please provide flat no and license plate number');
+                      return;
+                    }
+                    if (onAddVehicle) {
+                      onAddVehicle({
+                        SocietyId: activeSocietyId,
+                        FlatNo: newVehFlatNo.trim(),
+                        OwnerName: newVehOwnerName.trim() || activeResidentMember.OwnerName,
+                        VehicleNo: newVehNo.trim().toUpperCase(),
+                        VehicleType: newVehType,
+                        ParkingSlotNo: newVehSlotNo.trim() || `Slot ${newVehFlatNo.trim()}`,
+                        SlotNo: newVehSlotNo.trim() || `Slot ${newVehFlatNo.trim()}`,
+                        StickerIssued: newVehStickerIssued
+                      });
+                      triggerToast(`Registered vehicle ${newVehNo.trim().toUpperCase()}!`);
+                    }
+                    setShowAddVehicleModal(false);
+                  }}
+                  className="space-y-2.5"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Flat Number</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 101"
+                        value={newVehFlatNo}
+                        onChange={(e) => setNewVehFlatNo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs uppercase font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Owner / Resident Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. John Doe"
+                        value={newVehOwnerName}
+                        onChange={(e) => setNewVehOwnerName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">License Plate Number</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. MH-02-AB-1234"
+                        value={newVehNo}
+                        onChange={(e) => setNewVehNo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono uppercase font-black"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Vehicle Category</label>
+                      <select
+                        value={newVehType}
+                        onChange={(e) => setNewVehType(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-semibold"
+                      >
+                        <option value="4-Wheeler">4-Wheeler (Car)</option>
+                        <option value="2-Wheeler">2-Wheeler (Bike/Scooter)</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Assigned Parking Slot</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Slot A-101"
+                        value={newVehSlotNo}
+                        onChange={(e) => setNewVehSlotNo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1 flex flex-col justify-end pb-1">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newVehStickerIssued}
+                          onChange={(e) => setNewVehStickerIssued(e.target.checked)}
+                          className="rounded text-indigo-600"
+                        />
+                        <span className="font-extrabold text-slate-700 text-[10px]">Issue Gate Sticker Tag</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer mt-2"
+                  >
+                    Save Vehicle Registration
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* 6. Issue Guest Parking Pass Modal */}
+          {showAddGuestParkingModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-5 space-y-3.5 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <ParkingSquare className="w-5 h-5 text-indigo-600" />
+                    <h3 className="font-extrabold text-slate-800">Issue Visitor Parking Permit</h3>
+                  </div>
+                  <button onClick={() => setShowAddGuestParkingModal(false)} className="p-1 text-slate-400 hover:text-slate-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newGPassFlatNo.trim() || !newGPassGuestName.trim() || !newGPassVehNo.trim()) {
+                      triggerToast('Please fill host flat, guest name, and vehicle number');
+                      return;
+                    }
+                    if (onAddGuestParking) {
+                      onAddGuestParking({
+                        SocietyId: activeSocietyId,
+                        FlatNo: newGPassFlatNo.trim(),
+                        GuestName: newGPassGuestName.trim(),
+                        VehicleNo: newGPassVehNo.trim().toUpperCase(),
+                        GuestVehicleNo: newGPassVehNo.trim().toUpperCase(),
+                        VehicleType: newGPassVehType,
+                        AssignedSlot: newGPassSlot.trim() || 'Visitor Slot V-01',
+                        ValidFrom: newGPassValidFrom || new Date().toISOString().split('T')[0],
+                        ValidUntil: newGPassValidUntil || new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                        Status: 'Active'
+                      });
+                      triggerToast(`Issued visitor permit for ${newGPassGuestName.trim()}`);
+                    }
+                    setShowAddGuestParkingModal(false);
+                  }}
+                  className="space-y-2.5"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Host Flat Number</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 101"
+                        value={newGPassFlatNo}
+                        onChange={(e) => setNewGPassFlatNo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs uppercase font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Visitor / Guest Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Vikram Malhotra"
+                        value={newGPassGuestName}
+                        onChange={(e) => setNewGPassGuestName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Guest Vehicle Number</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. MH-12-CD-5678"
+                        value={newGPassVehNo}
+                        onChange={(e) => setNewGPassVehNo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono uppercase font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Assigned Visitor Slot</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Visitor Slot V-03"
+                        value={newGPassSlot}
+                        onChange={(e) => setNewGPassSlot(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-indigo-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Valid From Date</label>
+                      <input
+                        type="date"
+                        value={newGPassValidFrom}
+                        onChange={(e) => setNewGPassValidFrom(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Valid Until Date</label>
+                      <input
+                        type="date"
+                        value={newGPassValidUntil}
+                        onChange={(e) => setNewGPassValidUntil(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer mt-2"
+                  >
+                    Issue Visitor Permit
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- TIER 2 MODAL: UPLOAD SOCIETY DOCUMENT ----------------- */}
+          {showAddDocModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-4 space-y-3 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    <h3 className="font-extrabold text-slate-800 text-sm">Upload Central Society Document</h3>
+                  </div>
+                  <button onClick={() => setShowAddDocModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newDocTitle.trim()) {
+                      triggerToast('Please enter document title');
+                      return;
+                    }
+                    if (onAddSocietyDocument) {
+                      onAddSocietyDocument({
+                        SocietyId: activeSocietyId,
+                        Title: newDocTitle.trim(),
+                        Category: newDocCategory,
+                        DocumentUrl: newDocUrl || '#',
+                        FileName: newDocFileName || `${newDocTitle.replace(/\s+/g, '_')}.pdf`,
+                        FileSize: '1.8 MB',
+                        IsPublic: newDocIsPublic,
+                        UploadDate: new Date().toISOString().split('T')[0],
+                        UploadedBy: userRole === 'Admin' ? 'Management Committee' : 'Resident',
+                        Notes: newDocNotes.trim()
+                      });
+                      setShowAddDocModal(false);
+                      triggerToast(`Document "${newDocTitle}" uploaded successfully!`);
+                    }
+                  }}
+                  className="space-y-3"
+                >
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Document Title</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Annual Audit Report 2025-26"
+                      value={newDocTitle}
+                      onChange={(e) => setNewDocTitle(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Folder Category</label>
+                    <select
+                      value={newDocCategory}
+                      onChange={(e) => setNewDocCategory(e.target.value as any)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-medium"
+                    >
+                      <option value="Legal Documents">Legal Documents & Registration</option>
+                      <option value="AGM Minutes">AGM & Committee Minutes</option>
+                      <option value="Financial Audits">Financial Audits & Balance Sheets</option>
+                      <option value="Building Rules">Building Bye-laws & Rules</option>
+                      <option value="Circulars">General Circulars & Notices</option>
+                    </select>
+                  </div>
+
+                  <FileUpload
+                    label="Upload Society Document File"
+                    bucket="society-docs"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    currentUrl={newDocUrl}
+                    currentFileName={newDocFileName}
+                    onUploadSuccess={(res) => {
+                      setNewDocUrl(res.url);
+                      setNewDocFileName(res.fileName);
+                      triggerToast(`Society Document uploaded to 'society-docs' bucket!`);
+                    }}
+                    onClear={() => {
+                      setNewDocUrl('');
+                      setNewDocFileName('');
+                    }}
+                    isDark={isDark}
+                  />
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Notes / Description</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Add brief summary or index points..."
+                      value={newDocNotes}
+                      onChange={(e) => setNewDocNotes(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  {/* Public vs Private toggle checkbox */}
+                  <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="font-extrabold text-blue-900 block text-[10px]">Public Document Access</span>
+                      <span className="text-[8.5px] text-blue-700">Allow all society residents to view and download</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={newDocIsPublic}
+                      onChange={(e) => setNewDocIsPublic(e.target.checked)}
+                      className="w-4 h-4 accent-blue-600 cursor-pointer"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer"
+                  >
+                    Upload to Document Vault
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- TIER 2 MODAL: DOCUMENT PREVIEW MODAL ----------------- */}
+          {previewingSocietyDoc && (
+            <div className="absolute inset-0 bg-slate-900/80 z-50 flex flex-col justify-center p-3">
+              <div className="bg-white rounded-2xl p-4 space-y-3 animate-fadeIn shadow-2xl text-xs max-h-[85%] overflow-y-auto relative">
+                <div className="flex justify-between items-start border-b border-slate-200 pb-2">
+                  <div>
+                    <span className="text-[8px] bg-blue-100 text-blue-700 font-extrabold px-1.5 py-0.5 rounded uppercase">
+                      {previewingSocietyDoc.Category}
+                    </span>
+                    <h3 className="font-black text-slate-900 text-sm mt-1">{previewingSocietyDoc.Title}</h3>
+                    <p className="text-[8.5px] text-slate-400 font-semibold">
+                      Uploaded {previewingSocietyDoc.UploadDate} {previewingSocietyDoc.UploadedBy ? `by ${previewingSocietyDoc.UploadedBy}` : ''}
+                    </p>
+                  </div>
+                  <button onClick={() => setPreviewingSocietyDoc(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Stamped Document Preview Area */}
+                <div className="bg-slate-100 p-4 rounded-xl border border-slate-200 text-center relative overflow-hidden space-y-3">
+                  <div className="absolute inset-0 flex items-center justify-center opacity-10 pointer-events-none rotate-[-25deg]">
+                    <span className="text-3xl font-black text-slate-900 border-4 border-slate-900 px-4 py-2 uppercase">
+                      OFFICIAL SOCIETY RECORD
+                    </span>
+                  </div>
+
+                  <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-2xl mx-auto flex items-center justify-center shadow-2xs">
+                    <FileText className="w-6 h-6" />
+                  </div>
+
+                  <p className="text-xs font-bold text-slate-800">{previewingSocietyDoc.FileName || 'Document.pdf'}</p>
+                  <p className="text-[9px] text-slate-500">{previewingSocietyDoc.Notes || 'Official society document archived in digital vault.'}</p>
+
+                  <div className="p-3 bg-white rounded-lg border border-slate-200 text-left space-y-1.5 text-[9px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-semibold">Access Privilege:</span>
+                      <span className="font-bold text-emerald-700">{previewingSocietyDoc.IsPublic ? 'Public Resident Access' : 'Committee Only'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400 font-semibold">Document Hash / ID:</span>
+                      <span className="font-mono text-slate-600">{previewingSocietyDoc.id}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      triggerToast(`Downloading ${previewingSocietyDoc.FileName || 'Document.pdf'}...`);
+                    }}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download File
+                  </button>
+                  <button
+                    onClick={() => setPreviewingSocietyDoc(null)}
+                    className="px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-xl text-xs cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- TIER 2 MODAL: ADD AMC CONTRACT ----------------- */}
+          {showAddAmcModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-4 space-y-3 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Wrench className="w-4 h-4 text-teal-600" />
+                    <h3 className="font-extrabold text-slate-800 text-sm">Register AMC Maintenance Contract</h3>
+                  </div>
+                  <button onClick={() => setShowAddAmcModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!newAmcAssetName.trim() || !newAmcVendorName.trim()) {
+                      triggerToast('Please provide asset name and vendor name');
+                      return;
+                    }
+                    if (onAddAssetAMC) {
+                      onAddAssetAMC({
+                        SocietyId: activeSocietyId,
+                        AssetName: newAmcAssetName.trim(),
+                        Category: newAmcCategory,
+                        VendorName: newAmcVendorName.trim(),
+                        TechnicianName: newAmcTechName.trim() || 'Service Desk',
+                        TechnicianContact: newAmcTechContact.trim() || '+91 98765 00000',
+                        ContractStartDate: newAmcStartDate,
+                        ContractExpiryDate: newAmcExpiryDate,
+                        NextServiceDueDate: newAmcNextDue,
+                        Status: 'Operational',
+                        Remarks: newAmcRemarks.trim()
+                      });
+                      setShowAddAmcModal(false);
+                      triggerToast(`AMC for "${newAmcAssetName}" registered!`);
+                    }
+                  }}
+                  className="space-y-3"
+                >
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Equipment / Asset Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Passenger Elevator 1 - Wing A"
+                      value={newAmcAssetName}
+                      onChange={(e) => setNewAmcAssetName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Category</label>
+                      <select
+                        value={newAmcCategory}
+                        onChange={(e) => setNewAmcCategory(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-medium"
+                      >
+                        <option value="Lift / Elevator">Lift / Elevator</option>
+                        <option value="Diesel Generator">Diesel Generator</option>
+                        <option value="Water Pump">Water Pump & Hydro System</option>
+                        <option value="Fire Safety System">Fire Safety & Extinguishers</option>
+                        <option value="CCTV & Gate">CCTV & Gate Boom Barrier</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">AMC Vendor Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Otis Elevators India"
+                        value={newAmcVendorName}
+                        onChange={(e) => setNewAmcVendorName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Technician Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Rajesh Kumar"
+                        value={newAmcTechName}
+                        onChange={(e) => setNewAmcTechName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Technician Phone</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. +91 98765 43210"
+                        value={newAmcTechContact}
+                        onChange={(e) => setNewAmcTechContact(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Contract Start Date</label>
+                      <input
+                        type="date"
+                        value={newAmcStartDate}
+                        onChange={(e) => setNewAmcStartDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Contract Expiry Date</label>
+                      <input
+                        type="date"
+                        value={newAmcExpiryDate}
+                        onChange={(e) => setNewAmcExpiryDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-teal-700"
+                      />
+                    </div>
+                  </div>
+
+                  <FileUpload
+                    label="Upload AMC Agreement / Equipment Spec PDF"
+                    bucket="society-docs"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    currentUrl={newAmcReportUrl}
+                    onUploadSuccess={(res) => {
+                      setNewAmcReportUrl(res.url);
+                      triggerToast(`AMC Agreement uploaded to 'society-docs' bucket!`);
+                    }}
+                    onClear={() => setNewAmcReportUrl('')}
+                    isDark={isDark}
+                  />
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- TIER 2 MODAL: LOG ROUTINE SERVICING ----------------- */}
+          {showServiceLogModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-4 space-y-3 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 text-sm">Log Servicing: {showServiceLogModal.AssetName}</h3>
+                    <p className="text-[8.5px] text-slate-400 font-semibold">AMC Vendor: {showServiceLogModal.VendorName}</p>
+                  </div>
+                  <button onClick={() => setShowServiceLogModal(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (onUpdateAssetAMC) {
+                      onUpdateAssetAMC(showServiceLogModal.id, {
+                        LastServicedDate: serviceDate,
+                        NextServiceDueDate: nextServiceDueDate || new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0],
+                        Remarks: serviceNotes.trim(),
+                        Status: 'Operational'
+                      });
+                      setShowServiceLogModal(null);
+                      triggerToast(`Routine servicing recorded!`);
+                    }
+                  }}
+                  className="space-y-3"
+                >
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Service Date</label>
+                      <input
+                        type="date"
+                        value={serviceDate}
+                        onChange={(e) => setServiceDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Next Due Date</label>
+                      <input
+                        type="date"
+                        value={nextServiceDueDate || new Date(Date.now() + 90 * 86400000).toISOString().split('T')[0]}
+                        onChange={(e) => setNextServiceDueDate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-teal-700"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Technician Inspection Notes</label>
+                    <textarea
+                      rows={3}
+                      required
+                      placeholder="e.g. Replaced lift brake pads, lubricated pulleys, motor alignment verified OK."
+                      value={serviceNotes}
+                      onChange={(e) => setServiceNotes(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <FileUpload
+                    label="Upload Servicing Bill / Inspection Report PDF"
+                    bucket="society-docs"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    currentUrl={serviceReportUrl}
+                    onUploadSuccess={(res) => {
+                      setServiceReportUrl(res.url);
+                      triggerToast(`Servicing Bill uploaded to 'society-docs' bucket!`);
+                    }}
+                    onClear={() => setServiceReportUrl('')}
+                    isDark={isDark}
+                  />
+
+                  <button
+                    type="submit"
+                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer"
+                  >
+                    Complete Service Log Entry
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- TIER 2 MODAL: BATCH WATER METER READINGS ----------------- */}
+          {showBatchWaterMeterModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-4 space-y-3 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div>
+                    <h3 className="font-extrabold text-slate-800 text-sm">Batch Water Meter Entry</h3>
+                    <p className="text-[8.5px] text-slate-400 font-semibold">Billing Period: {waterReadingMonth}</p>
+                  </div>
+                  <button onClick={() => setShowBatchWaterMeterModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-2 bg-cyan-50 border border-cyan-200 rounded-xl text-[8.5px] text-cyan-900">
+                  ⚡ Input current reading for each flat. Consumed units and estimated charges (₹12/unit) are computed automatically.
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {batchMeterReadings.map((row, idx) => {
+                    const curr = parseFloat(row.currentReading) || 0;
+                    const consumed = Math.max(0, curr - row.prevReading);
+                    const charge = consumed * row.unitRate;
+
+                    return (
+                      <div key={row.flatNo} className="bg-slate-50 p-2 rounded-xl border border-slate-200 flex items-center justify-between gap-2">
+                        <div className="w-16">
+                          <span className="font-extrabold text-slate-800 text-xs block">Flat {row.flatNo}</span>
+                          <span className="text-[8px] text-slate-400 font-semibold">Prev: {row.prevReading}</span>
+                        </div>
+
+                        <div className="flex-1">
+                          <input
+                            type="number"
+                            value={row.currentReading}
+                            onChange={(e) => {
+                              const updated = [...batchMeterReadings];
+                              updated[idx].currentReading = e.target.value;
+                              setBatchMeterReadings(updated);
+                            }}
+                            placeholder="Current Mtr"
+                            className="w-full bg-white border border-slate-300 p-1.5 rounded-lg text-xs font-bold text-cyan-800"
+                          />
+                        </div>
+
+                        <div className="w-24 text-right">
+                          <span className="text-xs font-black text-cyan-700 block">{consumed} Units</span>
+                          <span className="text-[8px] font-bold text-emerald-600">₹{charge}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onBatchAddWaterMeters) {
+                      const records: Omit<WaterMeter, 'id'>[] = batchMeterReadings.map(r => {
+                        const curr = parseFloat(r.currentReading) || r.prevReading;
+                        const consumed = Math.max(0, curr - r.prevReading);
+                        return {
+                          SocietyId: activeSocietyId,
+                          FlatNo: r.flatNo,
+                          ReadingMonth: waterReadingMonth,
+                          PreviousReading: r.prevReading,
+                          CurrentReading: curr,
+                          ConsumedUnits: consumed,
+                          UnitRate: r.unitRate,
+                          TotalCharge: consumed * r.unitRate,
+                          ReadingDate: new Date().toISOString().split('T')[0],
+                          MeterSerialNo: `WM-${r.flatNo}`
+                        };
+                      });
+                      onBatchAddWaterMeters(records);
+                      setShowBatchWaterMeterModal(false);
+                      triggerToast(`Batch water meter readings saved for ${waterReadingMonth}!`);
+                    }
+                  }}
+                  className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer mt-2"
+                >
+                  Save All Flat Meter Readings
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- TIER 2 MODAL: LOG TANK CLEANING ----------------- */}
+          {showAddTankCleaningModal && (
+            <div className="absolute inset-0 bg-slate-900/60 z-50 flex flex-col justify-end">
+              <div className="bg-white rounded-t-3xl p-4 space-y-3 animate-slide-up shadow-2xl text-xs max-h-[90%] overflow-y-auto">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Droplets className="w-4 h-4 text-cyan-600" />
+                    <h3 className="font-extrabold text-slate-800 text-sm">Log Water Tank Maintenance</h3>
+                  </div>
+                  <button onClick={() => setShowAddTankCleaningModal(false)} className="p-1 text-slate-400 hover:text-slate-600 rounded-full">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setShowAddTankCleaningModal(false);
+                    triggerToast(`Tank cleaning schedule logged for ${tankName}!`);
+                  }}
+                  className="space-y-3"
+                >
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-600 block">Tank Identifier</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Overhead Tank - Wing A & B"
+                      value={tankName}
+                      onChange={(e) => setTankName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Tank Capacity</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 50,000 Liters"
+                        value={tankCapacity}
+                        onChange={(e) => setTankCapacity(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Cleaning Vendor</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. AquaClean Services"
+                        value={tankVendor}
+                        onChange={(e) => setTankVendor(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Cleaning Date</label>
+                      <input
+                        type="date"
+                        value={tankLastCleaned}
+                        onChange={(e) => setTankLastCleaned(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-600 block">Next Due Date</label>
+                      <input
+                        type="date"
+                        value={tankNextDue}
+                        onChange={(e) => setTankNextDue(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-cyan-700"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-extrabold py-2.5 rounded-xl shadow cursor-pointer mt-2"
+                  >
+                    Save Tank Maintenance Log
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- MODAL: REAL-TIME PUSH NOTIFICATIONS CENTER ----------------- */}
+          {showNotificationsModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 z-50 animate-fade-in">
+              <div className={`w-full max-w-sm rounded-3xl p-4 shadow-2xl border transition-all ${
+                isDark ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-150 text-slate-800'
+              }`}>
+                <div className="flex justify-between items-center pb-3 border-b border-slate-200/50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                      <BellRing className="w-4 h-4 animate-bounce" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-xs">Notification Center</h3>
+                      <p className="text-[9px] text-slate-400 font-medium">Real-time alerts & gate notifications</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowNotificationsModal(false)}
+                    className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex justify-between items-center my-3 gap-1.5">
+                  <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    <button
+                      onClick={() => setNotificationFilter('all')}
+                      className={`px-2.5 py-1 text-[9.5px] font-bold rounded-lg transition-colors cursor-pointer ${
+                        notificationFilter === 'all'
+                          ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      All ({notifications.length})
+                    </button>
+                    <button
+                      onClick={() => setNotificationFilter('unread')}
+                      className={`px-2.5 py-1 text-[9.5px] font-bold rounded-lg transition-colors cursor-pointer ${
+                        notificationFilter === 'unread'
+                          ? 'bg-white dark:bg-slate-700 text-purple-600 dark:text-purple-300 shadow-2xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      Unread ({unreadNotifCount})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {unreadNotifCount > 0 && (
+                      <button
+                        onClick={handleMarkAllNotifsRead}
+                        className="text-[8.5px] font-extrabold text-purple-600 hover:text-purple-700 bg-purple-50 dark:bg-purple-950/50 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800 cursor-pointer"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                    <button
+                      onClick={handleSimulateNewPush}
+                      className="text-[8.5px] font-extrabold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 cursor-pointer flex items-center gap-0.5"
+                      title="Simulate incoming real-time push alert"
+                    >
+                      <span>⚡ Test Push</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-[280px] overflow-y-auto pr-0.5 scrollbar-thin">
+                  {notifications
+                    .filter(n => notificationFilter === 'all' || !n.read)
+                    .map((notif) => (
+                      <div 
+                        key={notif.id}
+                        onClick={() => {
+                          setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+                          if (notif.targetTab) setCurrentTab(notif.targetTab);
+                          setShowNotificationsModal(false);
+                        }}
+                        className={`p-2.5 rounded-2xl border transition-all cursor-pointer relative ${
+                          notif.read 
+                            ? 'bg-slate-50/60 dark:bg-slate-800/40 border-slate-200/50 dark:border-slate-800 text-slate-500' 
+                            : 'bg-white dark:bg-slate-800 border-purple-200 dark:border-purple-800 shadow-3xs text-slate-800 dark:text-slate-100'
+                        }`}
+                      >
+                        {!notif.read && (
+                          <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-purple-600 animate-pulse"></span>
+                        )}
+                        <div className="pr-4">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[7.5px] font-black uppercase px-1.5 py-0.2 rounded font-mono ${
+                              notif.category === 'emergency' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200' :
+                              notif.category === 'gate' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' :
+                              notif.category === 'payment' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200' :
+                              'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200'
+                            }`}>
+                              {notif.category}
+                            </span>
+                            <span className="text-[8px] text-slate-400 font-semibold">{notif.timestamp}</span>
+                          </div>
+                          <h4 className="font-extrabold text-[11px] mt-1 text-slate-800 dark:text-slate-100">{notif.title}</h4>
+                          <p className="text-[9.5px] text-slate-600 dark:text-slate-300 mt-0.5 leading-tight">{notif.message}</p>
+                        </div>
+                      </div>
+                  ))}
+                  {notifications.filter(n => notificationFilter === 'all' || !n.read).length === 0 && (
+                    <p className="text-center py-8 text-[10px] text-slate-400 font-semibold">No notifications found.</p>
+                  )}
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-slate-200/50 text-center">
+                  <span className="text-[8.5px] text-slate-400 font-medium">Click any notification to navigate directly to its section</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- MODAL: BROADCAST EMERGENCY ALERT BANNER ----------------- */}
+          {showBroadcastAlertModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 z-50 animate-fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 w-full max-w-sm shadow-2xl border border-slate-150 dark:border-slate-800 text-slate-800 dark:text-slate-100">
+                <div className="flex justify-between items-center pb-2.5 border-b border-slate-150 dark:border-slate-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center font-bold">
+                      <ShieldAlert className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-xs">Broadcast Urgent Notice</h3>
+                      <p className="text-[9px] text-slate-400">High-contrast alert banner on Resident Dashboard</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowBroadcastAlertModal(false)}
+                    className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!broadcastTitle || !broadcastMessage) {
+                      triggerToast('Please provide both title and description!');
+                      return;
+                    }
+                    setActiveAlertBanner({
+                      id: `alert-${Date.now()}`,
+                      title: broadcastTitle,
+                      message: broadcastMessage,
+                      priority: 'Emergency',
+                      timestamp: `Today, ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    });
+                    setAlertBannerDismissed(false);
+                    setShowBroadcastAlertModal(false);
+                    triggerToast('📢 Emergency Alert published to Resident Dashboard!');
+                  }}
+                  className="space-y-3 mt-3"
+                >
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Alert Headline</label>
+                    <input
+                      type="text"
+                      required
+                      value={broadcastTitle}
+                      onChange={(e) => setBroadcastTitle(e.target.value)}
+                      placeholder="e.g. 🚨 Emergency Water Outage Notice"
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Alert Description & Action</label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={broadcastMessage}
+                      onChange={(e) => setBroadcastMessage(e.target.value)}
+                      placeholder="Provide concise operational instructions for all residents..."
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-2 rounded-xl text-xs text-slate-800 dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[9px] text-amber-800 dark:text-amber-200 font-medium leading-tight">
+                    ⚡ This urgent notice will be pinned at the top of the Resident Home feed until dismissed.
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowBroadcastAlertModal(false)}
+                      className="flex-1 py-2 text-xs font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 text-xs font-black text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow cursor-pointer"
+                    >
+                      Publish Notice Banner
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ----------------- MODAL: ONE-CLICK LEDGER STATEMENT PDF/PRINT EXPORT ----------------- */}
+          {showPrintLedgerModal && (
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 z-50 animate-fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-4 w-full max-w-sm shadow-2xl border border-slate-150 dark:border-slate-800 text-slate-800 dark:text-slate-100 max-h-[90vh] flex flex-col">
+                <div className="flex justify-between items-center pb-2.5 border-b border-slate-150 dark:border-slate-800 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center font-bold">
+                      <Printer className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-extrabold text-xs">Official Ledger Statement</h3>
+                      <p className="text-[9px] text-slate-400">Printable payment receipts & ledger report</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowPrintLedgerModal(false)}
+                    className="p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto my-3 space-y-3 pr-0.5 scrollbar-thin">
+                  {/* Printable Official Receipt Canvas */}
+                  <div id="printable-ledger-statement" className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5 text-[9.5px]">
+                    {/* Header */}
+                    <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-2">
+                      <div>
+                        <h2 className="font-black text-xs text-purple-700 dark:text-purple-300 uppercase tracking-tight">{societyName}</h2>
+                        <p className="text-[8px] text-slate-400 font-medium">{postalAddress}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[7.5px] font-mono font-bold bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded uppercase">Flat {loggedInMemberFlat}</span>
+                        <p className="text-[7.5px] text-slate-400 mt-0.5">{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                      </div>
+                    </div>
+
+                    {/* Resident Account Details */}
+                    <div className="grid grid-cols-2 gap-2 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-150 dark:border-slate-800">
+                      <div>
+                        <span className="text-[7px] text-slate-400 uppercase font-bold block">Primary Resident</span>
+                        <p className="font-extrabold text-[10px] text-slate-800 dark:text-slate-100">
+                          {members.find(m => m.FlatNo === loggedInMemberFlat)?.OwnerName || 'Resident Owner'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[7px] text-slate-400 uppercase font-bold block">Net Ledger Balance</span>
+                        <p className={`font-black text-[10px] ${
+                          (members.find(m => m.FlatNo === loggedInMemberFlat)?.Balance || 0) > 0 
+                            ? 'text-rose-600' 
+                            : 'text-emerald-600'
+                        }`}>
+                          ₹{(members.find(m => m.FlatNo === loggedInMemberFlat)?.Balance || 0).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Statement Invoices Table */}
+                    <div>
+                      <h4 className="text-[8.5px] font-extrabold uppercase text-slate-400 tracking-wider mb-1">Invoices & Maintenance Charges</h4>
+                      <div className="space-y-1">
+                        {invoices
+                          .filter(inv => inv.SocietyId === activeSocietyId && (userRole === 'Admin' || inv.FlatNo === loggedInMemberFlat))
+                          .slice(0, 4)
+                          .map(inv => (
+                            <div key={inv.id} className="flex justify-between items-center bg-white dark:bg-slate-900 p-1.5 rounded-lg border border-slate-100 dark:border-slate-800 text-[8.5px]">
+                              <div>
+                                <span className="font-extrabold text-slate-800 dark:text-slate-200">{inv.BillMonth} Bill</span>
+                                <span className="text-[7px] text-slate-400 block font-medium">Flat {inv.FlatNo}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-bold block">₹{inv.TotalAmount}</span>
+                                <span className={`text-[6.5px] font-black uppercase ${inv.Status === 'Paid' ? 'text-emerald-600' : 'text-rose-600'}`}>{inv.Status}</span>
+                              </div>
+                            </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Payments Receipts Table */}
+                    <div>
+                      <h4 className="text-[8.5px] font-extrabold uppercase text-slate-400 tracking-wider mb-1">Cleared Payment Receipts</h4>
+                      <div className="space-y-1">
+                        {payments
+                          .filter(pmt => pmt.SocietyId === activeSocietyId && (userRole === 'Admin' || pmt.FlatNo === loggedInMemberFlat))
+                          .slice(0, 4)
+                          .map((pmt, i) => (
+                            <div key={i} className="flex justify-between items-center bg-emerald-50/50 dark:bg-emerald-950/20 p-1.5 rounded-lg border border-emerald-100 dark:border-emerald-900/50 text-[8.5px]">
+                              <div>
+                                <span className="font-extrabold text-emerald-800 dark:text-emerald-200">Receipt #{1001 + i}</span>
+                                <span className="text-[7px] text-slate-400 block font-medium">{pmt.Mode} • {pmt.Date}</span>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-black text-emerald-600">+₹{pmt.Amount}</span>
+                                <span className="text-[6.5px] font-bold text-emerald-700 block uppercase">Cleared</span>
+                              </div>
+                            </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="text-center pt-1 border-t border-slate-200 dark:border-slate-700 text-[7px] text-slate-400 italic">
+                      Computer generated statement for {societyName}. No physical signature required.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-slate-150 dark:border-slate-800 shrink-0">
+                  <button
+                    onClick={() => handleDownloadLedgerCSV(loggedInMemberFlat)}
+                    className="flex-1 py-2 text-[10px] font-extrabold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>CSV Export</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      window.print();
+                      triggerToast('Print dialog launched!');
+                    }}
+                    className="flex-1 py-2 text-[10px] font-black text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print (PDF)</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}

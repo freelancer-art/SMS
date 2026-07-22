@@ -14,7 +14,7 @@ import {
   Eye,
   Settings
 } from 'lucide-react';
-import { Society, Member, Tower } from '../types';
+import { Society, Member, Tower, FeatureFlags } from '../types';
 
 interface OnboardingWizardProps {
   onComplete: (society: Society, initialMembers: Member[], adminEmail: string, adminFlat: string) => void;
@@ -25,11 +25,20 @@ interface OnboardingWizardProps {
 export default function OnboardingWizard({ onComplete, onCancel, theme = 'light' }: OnboardingWizardProps) {
   const [step, setStep] = useState(1);
 
-  // Step 1 States: Basic Details
+  // Step 1 States: Basic Details & Feature Modules
   const [socName, setSocName] = useState('');
   const [socType, setSocType] = useState('Housing Society');
   const [socAddress, setSocAddress] = useState('');
   const [regNo, setRegNo] = useState('');
+  const [features, setFeatures] = useState<FeatureFlags>({
+    gatekeeper: true,
+    waterMeters: false,
+    tenantRegister: true,
+    amenities: true,
+    assetAMC: false,
+    parkingRegister: true,
+    documentVault: true,
+  });
 
   // Step 2 States: Structural Topology
   const [structureType, setStructureType] = useState<'standalone' | 'wings' | 'towers_wings'>('standalone');
@@ -155,7 +164,8 @@ export default function OnboardingWizard({ onComplete, onCancel, theme = 'light'
       Wings: generatedWings,
       HasWings: generatedWings.length > 0,
       StructureType: structureType,
-      Towers: generatedTowers.length > 0 ? generatedTowers : undefined
+      Towers: generatedTowers.length > 0 ? generatedTowers : undefined,
+      FeaturesEnabled: features
     };
 
     // Prepare initial members directory (one per flat)
@@ -291,6 +301,61 @@ export default function OnboardingWizard({ onComplete, onCancel, theme = 'light'
                 onChange={(e) => setRegNo(e.target.value)}
                 className="w-full bg-slate-50/50 border border-slate-200 hover:border-purple-300 p-2.5 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 font-bold text-xs"
               />
+            </div>
+          </div>
+
+          {/* Feature Modules Management Section */}
+          <div className="p-4 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-xl space-y-3 mt-4 text-left">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+                  <Settings className="w-4 h-4 text-purple-600" />
+                  Feature Modules Management
+                </h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                  Enable or disable optional management features based on society requirements.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+              {[
+                { key: 'gatekeeper', label: 'Gatekeeper & Security', desc: 'Visitor Check-in & OTP passes' },
+                { key: 'tenantRegister', label: 'Tenant Register', desc: 'Lease & Police Verification KYC' },
+                { key: 'amenities', label: 'Amenities Booking', desc: 'Clubhouse & Tennis Court' },
+                { key: 'parkingRegister', label: 'Parking Register', desc: 'Vehicle & Guest Slots' },
+                { key: 'documentVault', label: 'Document Vault', desc: 'By-laws, AGM Minutes & Audit' },
+                { key: 'waterMeters', label: 'Sub-Metered Water', desc: 'Monthly Consumption Billing' },
+                { key: 'assetAMC', label: 'Asset AMC Register', desc: 'Lift & Generator Servicing' },
+              ].map((mod) => {
+                const isChecked = features[mod.key as keyof FeatureFlags];
+                return (
+                  <label
+                    key={mod.key}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-all ${
+                      isChecked
+                        ? 'bg-purple-50/70 border-purple-300 text-purple-900 dark:bg-purple-950/30 dark:border-purple-800 dark:text-purple-200'
+                        : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-800'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-extrabold text-[10.5px] block">{mod.label}</span>
+                      <span className="text-[8.5px] opacity-75 font-medium block">{mod.desc}</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={(e) =>
+                        setFeatures({
+                          ...features,
+                          [mod.key]: e.target.checked,
+                        })
+                      }
+                      className="w-4 h-4 accent-purple-600 rounded cursor-pointer shrink-0"
+                    />
+                  </label>
+                );
+              })}
             </div>
           </div>
         </div>

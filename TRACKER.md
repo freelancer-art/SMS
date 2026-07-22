@@ -19,6 +19,14 @@ This tracker outlines the core capabilities, ongoing enhancements, and newly pri
 | **Billing & Invoicing** | Auto Monthly Billing Run | Committee Admin | High | **Completed** | One-click invoice engine generating monthly maintenance, water, security, and utility bills for all resident units. |
 | **Billing & Invoicing** | Member Payment Portal | Resident | High | **Completed** | Residents pay outstanding bills via simulated UPI, cash, cheque, or bank transfer with ledger tracking. |
 | **Complaints & Helpdesk** | Interactive Discussion Thread | Resident & Admin | Medium | **Completed** | Multi-user chat thread on any open/active complaint for troubleshooting. |
+| **Emergency & Helpdesk** | SOS & Emergency Contacts Directory | Resident & Admin | High | **Completed** | Quick dial and emergency helpline directory (Plumber, Electrician, Police, Fire, Committee) with search & priority badges. |
+| **Resident Management** | Tenant Register & KYC Tracker | Resident & Admin | High | **Completed** | Comprehensive register for tenant move-in/move-out dates, rental agreements, ID proof document attachments, and police verification status. |
+| **Vehicle & Parking** | Vehicle Register & Guest Slot Passes | Resident & Admin | High | **Completed** | Resident vehicle sticker tracking (license plates, slot #s) and guest parking pass issuer with temporary slot allocations. |
+| **Document Vault** | Society Document Repository | All Users | Medium | **Completed** | Central repository for society bylaws, AGM minutes, annual audit reports, and public circulars with role-gated upload permissions. |
+| **Asset & Maintenance** | Asset AMC & Lift Servicing Tracker | Committee Admin | Medium | **Completed** | Vendor contract tracking for lifts, DG sets, gym equipment, and fire safety systems with service due alerts and report URLs. |
+| **Water Management** | Water Meter & Tank Cleaning Tracker | Resident & Admin | Medium | **Completed** | Flat-wise sub-meter reading logs, unit consumption tracking, and tank cleaning schedule updates. |
+| **Database & Export** | Supabase SQL Sync & Expo Hub | System Admin | High | **Completed** | Full DDL SQL schema generation including all 19 core tables (`EmergencyContacts`, `Tenants`, `Vehicles`, `GuestParking`, `SocietyDocuments`, `AssetAMCs`, `WaterMeters`, etc.) with RLS policies and code exports. |
+| **UI & UX Theme** | Dynamic Light/Dark Theme Adaptation | All Users | Medium | **Completed** | Comprehensive theme-aware UI in `MobileSimulator` and main app shell, auto-adjusting buttons, badges, navigation, and modal styling. |
 
 ---
 
@@ -26,107 +34,60 @@ This tracker outlines the core capabilities, ongoing enhancements, and newly pri
 
 ### Priority 1: Multi-Unit Ownership Swapper (High Priority)
 * **Goal**: Enable a single email address (e.g., Amit Sharma) to own multiple flats inside the same society (e.g., Greenwood Flat 101 and Flat 302).
-* **Functional Requirements**:
-  1. Scan all member entries matching the logged-in email.
-  2. If count > 1, show a **"Select Active Flat"** dropdown in the resident dashboard header.
-  3. Swapping the active flat instantly triggers a context refresh across:
-     - Dues and outstanding balance.
-     - Paid/Unpaid invoice lists.
-     - Unit-specific visitor alerts & gate authorizations.
-     - Personal complaint logs.
-* **UX Design**: A compact, floating badge in the navigation area: `🏠 Flat: 101 (Active) ▾` with a dropdown listing other owned units in that society.
-
----
+* **Status**: **Completed**
 
 ### Priority 2: Gated Notice Document Upload & Preview (High Priority)
 * **Goal**: Ensure notices are highly professional and document-secured. Gated creation to Committee Members only.
-* **Functional Requirements**:
-  1. **Upload Restriction**: Show the notice drafting panel and "Add Attachment" button **only** to users whose role is `'Admin'` (Committee Members).
-  2. **Simulated Drag & Drop / File Select**: Interactive upload element supporting PDF, DOCX, and JPG types. Allow selecting from a list of standard templates (e.g. *Water Billing Revision.pdf*, *AGM Meeting Circular.pdf*) or dragging local files to simulate real uploads.
-  3. **High-Fidelity Document Card**: Display uploaded attachments as custom stylized document cards with icons, file size tags, and download triggers.
-  4. **Viewer Role**: Regular Members see a static card view with a "Download Circular" button and an integrated previewer modal.
-
----
+* **Status**: **Completed**
 
 ### Priority 3: Society Hierarchical Structural Modeling (Medium Priority)
 * **Goal**: Replicate complex real-world layouts instead of flat strings.
-* **Model Structures**:
-  1. **Standalone Building**: Single tower, 1 to $N$ floors, with numeric flats per floor (e.g. 101, 102).
-  2. **Multiple Wings**: Single project split into wings (e.g. Wing A, Wing B), flat numbers containing wing prefixes (A-101, B-102).
-  3. **Towers with Wings**: Large multi-tower projects where each Tower (Tower 1, Tower 2) contains specific wings (Wing A, Wing B), and flats map to nested hierarchies (e.g., `Tower 1 ➔ Wing A ➔ Flat 101`).
-* **Schema Evolution**:
-  ```typescript
-  export interface Tower {
-    id: string;
-    Name: string;
-    Wings: string[];
-  }
-  export interface Society {
-    id: string;
-    Name: string;
-    BuildingType: string;
-    PostalAddress: string;
-    StructureType: 'standalone' | 'wings' | 'towers_wings';
-    Towers?: Tower[];
-    Wings?: string[];
-  }
-  ```
-
----
+* **Status**: **Completed**
 
 ### Priority 4: First-Time Onboarding & Registration Wizard (Medium Priority)
 * **Goal**: A step-by-step wizard for newly launching the application.
-* **Step-by-Step Flow**:
-  1. **Basic Details**: Setup Name, Building Type, Postal Address, and Registering Authority Details.
-  2. **Structural Topology Select**: Interactive UI choosing Standalone, Wings, or Towers with Wings. Configures the exact wings/towers.
-  3. **Auto Flat Generator**: Admins define floors (e.g., 1 to 10) and units per floor (e.g., 4), instantly auto-generating the directory list of flats with custom prefixes.
-  4. **Primary Admin Setup**: Create the initial Committee Secretary username, contact details, and secure login email.
-* **First-Time Detection**: If the local registry has no societies, automatically redirect the app launcher to this Wizard.
-
----
+* **Status**: **Completed**
 
 ### Priority 5: Shared Facility & Amenity Booking Calendar (Medium Priority)
 * **Goal**: Provide residents a visual booking system for common amenities.
-* **Functional Requirements**:
-  1. Interactive reservation table or grid of slots for major facilities: **Clubhouse**, **Party Lawn**, and **Tennis Court**.
-  2. Prevent overlapping bookings on the same date/time.
-  3. Resident can book a slot, instantly appearing in the global schedule list; Admins can cancel or approve any request.
-
----
+* **Status**: **Completed**
 
 ### Priority 6: OTP-Based Verification & Multi-Factor Simulation (Medium Priority)
 * **Goal**: Add realistic multi-factor security loops for high-value actions.
-* **Functional Requirements**:
-  1. Simulates delivery of a 6-digit numeric OTP via a sleek pop-up notification toast or SMS simulator modal when logging in, pre-approving visitors, or making dues payments.
-  2. Requires typing the exact code (e.g., `482910` displayed as a simulated text message) to verify the transaction.
+* **Status**: **Completed**
+
+### Priority 7: Essential Society Services (Tiers 1 & 2 Modules) (High Priority)
+* **Goal**: Expand capabilities into emergency SOS, tenant KYC, vehicle parking passes, document vault, AMC vendor contracts, and water meter maintenance.
+* **Status**: **Completed**
 
 ---
 
 ## 🛠️ Execution Action Plan
 
 1. [x] **Phase 1: Multi-Unit Swapper & notices Gating**
-   - Implement logged-in email scanner.
-   - Design and insert the Flat Swapper floating header control.
-   - Refactor notice forms to hide the attachment button and posting panel for regular members. Include simulated attachment uploads for admins.
 2. [x] **Phase 2: Advanced Structural Types & Schema Upgrade**
-   - Update `types.ts` to support nested `Tower` and `StructureType` schemas.
-   - Upgrade default database mock entries to match the new structure formats.
 3. [x] **Phase 3: Interactive Onboarding & Registration Wizard**
-   - Build a custom setup wizard view.
-   - Add first-time launcher check and automatic redirection.
 4. [x] **Phase 4: Shared Facility Booking & OTP MFA Simulation**
-   - Implement amenity booking schedule interface.
-   - Add simulated OTP MFA verification gates for secure triggers.
+5. [x] **Phase 5: Tiers 1 & 2 Society Services Expansion (SOS, Tenants, Vehicles, Docs, AMC, Water)**
+6. [x] **Phase 6: Supabase SQL Schema Sync & RLS Policies Update**
+7. [x] **Phase 7: MobileSimulator & Shell Light/Dark Theme Adaptation**
 
-## 💡 Future Simplifications & High-Efficiency Ideas (Under Consideration)
+---
 
-The following simple, lightweight features are planned as secondary enhancements to provide high-value information without introducing architectural overhead:
+## ⏳ Pending & Future Roadmap Items (Under Consideration)
 
-1. **Dashboard Alert Banner (High-Priority Notices)**
-   - Display a single high-contrast warning banner at the top of the resident home page for critical, time-sensitive events (e.g., "Water Supply suspended on Monday 10am-4pm").
-   - Keeps residents instantly informed of key society updates at a single glance.
+The following items represent remaining potential enhancements and future roadmap concepts:
 
-2. **One-Click Ledger PDF/Print Export**
-   - Provide a lightweight print-friendly receipt layout or a simple PDF download of the resident's maintenance payment ledger.
-   - Enables users to keep copies of transactions with zero server-side generation required.
+1. **Dashboard Alert Banner (High-Priority Notices)** — *Pending / Roadmap*
+   - Display a persistent high-contrast top notification banner on the resident home tab for critical emergencies (e.g. "Water Supply suspended today 10am - 4pm").
+
+2. **One-Click Ledger PDF/Print Export** — *Pending / Roadmap*
+   - Printable receipt and ledger statement generator for resident maintenance payments.
+
+3. **Real-time Push Notification Simulation** — *Pending / Roadmap*
+   - In-app notification center modal with unread badge counter for immediate gate arrivals, notice broadcasts, and payment reminders.
+
+4. **Biometric / QR Code Gatekeeper Scanner** — *Pending / Roadmap*
+   - QR scanner simulator for gate security officers to quickly validate pre-approved visitor passes.
+
 

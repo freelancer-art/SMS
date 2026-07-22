@@ -2999,7 +2999,7 @@ export const SUPABASE_SQL_SCHEMA = `-- Greenwood Society Connect: Supabase SQL D
 -- Since we modified the table schemas (e.g., adding "id", "SocietyId" and moving away from FlatNo as primary key), 
 -- you must DROP the old tables in Supabase first to let the new schema take effect. 
 -- Copy and run the uncommented line below in your Supabase SQL Editor if you are upgrading:
--- DROP TABLE IF EXISTS "Invoices", "Visitors", "ComplaintReplies", "AuditLogs", "Settings", "Notices", "Complaints", "Expenses", "Payments", "Members", "Societies" CASCADE;
+-- DROP TABLE IF EXISTS "WaterMeters", "AssetAMCs", "SocietyDocuments", "GuestParking", "Vehicles", "Tenants", "EmergencyContacts", "UserAuth", "Roles", "ComplaintReplies", "Visitors", "Invoices", "AuditLogs", "Settings", "Notices", "Complaints", "Expenses", "Payments", "Members", "Societies" CASCADE;
 
 -- 0. Create Societies Table
 CREATE TABLE IF NOT EXISTS "Societies" (
@@ -3163,6 +3163,103 @@ CREATE TABLE IF NOT EXISTS "UserAuth" (
   "Status" TEXT DEFAULT 'Active'
 );
 
+-- 13. Create EmergencyContacts Table
+CREATE TABLE IF NOT EXISTS "EmergencyContacts" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "Name" TEXT NOT NULL,
+  "Category" TEXT NOT NULL,
+  "Phone" TEXT NOT NULL,
+  "RoleOrTitle" TEXT,
+  "IsImportant" BOOLEAN DEFAULT false
+);
+
+-- 14. Create Tenants Table
+CREATE TABLE IF NOT EXISTS "Tenants" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "FlatNo" TEXT NOT NULL,
+  "TenantName" TEXT NOT NULL,
+  "ContactNo" TEXT,
+  "Email" TEXT,
+  "MoveInDate" TEXT,
+  "MoveOutDate" TEXT,
+  "AgreementDocUrl" TEXT,
+  "IdProofDocUrl" TEXT,
+  "KycStatus" TEXT DEFAULT 'Pending',
+  "Remarks" TEXT
+);
+
+-- 15. Create Vehicles Table
+CREATE TABLE IF NOT EXISTS "Vehicles" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "FlatNo" TEXT NOT NULL,
+  "OwnerName" TEXT NOT NULL,
+  "VehicleNo" TEXT NOT NULL,
+  "VehicleType" TEXT DEFAULT '4-Wheeler',
+  "ParkingSlotNo" TEXT,
+  "StickerIssued" BOOLEAN DEFAULT false
+);
+
+-- 16. Create GuestParking Table
+CREATE TABLE IF NOT EXISTS "GuestParking" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "FlatNo" TEXT NOT NULL,
+  "GuestName" TEXT NOT NULL,
+  "VehicleNo" TEXT NOT NULL,
+  "VehicleType" TEXT DEFAULT '4-Wheeler',
+  "AssignedSlot" TEXT,
+  "ValidFrom" TEXT NOT NULL,
+  "ValidUntil" TEXT NOT NULL,
+  "Status" TEXT DEFAULT 'Active'
+);
+
+-- 17. Create SocietyDocuments Table
+CREATE TABLE IF NOT EXISTS "SocietyDocuments" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "Title" TEXT NOT NULL,
+  "Category" TEXT NOT NULL,
+  "DocumentUrl" TEXT NOT NULL,
+  "IsPublic" BOOLEAN DEFAULT true,
+  "UploadedBy" TEXT,
+  "UploadedAt" TEXT,
+  "FileSize" TEXT
+);
+
+-- 18. Create AssetAMCs Table
+CREATE TABLE IF NOT EXISTS "AssetAMCs" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "AssetName" TEXT NOT NULL,
+  "AssetType" TEXT,
+  "VendorName" TEXT NOT NULL,
+  "VendorContact" TEXT,
+  "ContractStartDate" TEXT NOT NULL,
+  "ContractExpiryDate" TEXT NOT NULL,
+  "LastServicedDate" TEXT,
+  "NextServicedDate" TEXT,
+  "ServiceStatus" TEXT DEFAULT 'Operational',
+  "StatusNote" TEXT,
+  "ReportUrl" TEXT
+);
+
+-- 19. Create WaterMeters Table
+CREATE TABLE IF NOT EXISTS "WaterMeters" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT DEFAULT 'greenwood',
+  "FlatNo" TEXT NOT NULL,
+  "ReadingMonth" TEXT NOT NULL,
+  "PreviousReading" NUMERIC DEFAULT 0,
+  "CurrentReading" NUMERIC DEFAULT 0,
+  "UnitsConsumed" NUMERIC DEFAULT 0,
+  "RecordedBy" TEXT,
+  "RecordedAt" TEXT,
+  "Status" TEXT DEFAULT 'Entered'
+);
+
 -- Enable Row Level Security (RLS) policies
 ALTER TABLE "Societies" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Members" ENABLE ROW LEVEL SECURITY;
@@ -3177,6 +3274,13 @@ ALTER TABLE "Visitors" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ComplaintReplies" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Roles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "UserAuth" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "EmergencyContacts" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Tenants" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Vehicles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "GuestParking" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SocietyDocuments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "AssetAMCs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "WaterMeters" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read on Societies" ON "Societies" FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on Societies" ON "Societies" FOR INSERT WITH CHECK (true);
@@ -3235,6 +3339,41 @@ CREATE POLICY "Allow public delete on Visitors" ON "Visitors" FOR DELETE USING (
 CREATE POLICY "Allow public read on ComplaintReplies" ON "ComplaintReplies" FOR SELECT USING (true);
 CREATE POLICY "Allow public insert on ComplaintReplies" ON "ComplaintReplies" FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public delete on ComplaintReplies" ON "ComplaintReplies" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on EmergencyContacts" ON "EmergencyContacts" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on EmergencyContacts" ON "EmergencyContacts" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on EmergencyContacts" ON "EmergencyContacts" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on EmergencyContacts" ON "EmergencyContacts" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on Tenants" ON "Tenants" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on Tenants" ON "Tenants" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on Tenants" ON "Tenants" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on Tenants" ON "Tenants" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on Vehicles" ON "Vehicles" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on Vehicles" ON "Vehicles" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on Vehicles" ON "Vehicles" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on Vehicles" ON "Vehicles" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on GuestParking" ON "GuestParking" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on GuestParking" ON "GuestParking" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on GuestParking" ON "GuestParking" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on GuestParking" ON "GuestParking" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on SocietyDocuments" ON "SocietyDocuments" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on SocietyDocuments" ON "SocietyDocuments" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on SocietyDocuments" ON "SocietyDocuments" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on SocietyDocuments" ON "SocietyDocuments" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on AssetAMCs" ON "AssetAMCs" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on AssetAMCs" ON "AssetAMCs" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on AssetAMCs" ON "AssetAMCs" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on AssetAMCs" ON "AssetAMCs" FOR DELETE USING (true);
+
+CREATE POLICY "Allow public read on WaterMeters" ON "WaterMeters" FOR SELECT USING (true);
+CREATE POLICY "Allow public insert on WaterMeters" ON "WaterMeters" FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public update on WaterMeters" ON "WaterMeters" FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on WaterMeters" ON "WaterMeters" FOR DELETE USING (true);
 
 -- Insert Default Settings rows
 INSERT INTO "Settings" ("Key", "Value") VALUES

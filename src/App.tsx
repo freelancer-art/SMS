@@ -9,9 +9,13 @@ import {
   RefreshCw,
   Cpu,
   Sun,
-  Moon
+  Moon,
+  Cloud,
+  X,
+  Key,
+  Check
 } from 'lucide-react';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth } from './types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags } from './types';
 import { 
   MULTI_TENANT_MEMBERS, 
   MULTI_TENANT_PAYMENTS, 
@@ -22,7 +26,14 @@ import {
   MULTI_TENANT_VISITORS,
   MULTI_TENANT_COMPLAINT_REPLIES,
   MULTI_TENANT_ROLES,
-  MULTI_TENANT_USER_AUTHS
+  MULTI_TENANT_USER_AUTHS,
+  INITIAL_EMERGENCY_CONTACTS,
+  INITIAL_TENANTS,
+  INITIAL_VEHICLES,
+  INITIAL_GUEST_PARKINGS,
+  INITIAL_SOCIETY_DOCUMENTS,
+  INITIAL_ASSET_AMCS,
+  INITIAL_WATER_METERS
 } from './data/mockData';
 import { hashPassword, generateSalt, generateVisitorAccessToken } from './utils/security';
 import MobileSimulator from './components/MobileSimulator';
@@ -115,6 +126,10 @@ export default function App() {
   const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(() => {
     return localStorage.getItem('society_supabase_anon_key') || '';
   });
+  const [showCloudSyncModal, setShowCloudSyncModal] = useState(false);
+  const [cloudSyncUrlInput, setCloudSyncUrlInput] = useState('');
+  const [cloudSyncKeyInput, setCloudSyncKeyInput] = useState('');
+  const [cloudSyncStatusMsg, setCloudSyncStatusMsg] = useState<string | null>(null);
 
   // Multi-Society States
   const [societies, setSocieties] = useState<Society[]>(() => {
@@ -154,6 +169,13 @@ export default function App() {
   const [complaintReplies, setComplaintReplies] = useState<ComplaintReply[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [userAuths, setUserAuths] = useState<UserAuth[]>([]);
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [guestParkings, setGuestParkings] = useState<GuestParking[]>([]);
+  const [societyDocuments, setSocietyDocuments] = useState<SocietyDocument[]>([]);
+  const [assetAMCs, setAssetAMCs] = useState<AssetAMC[]>([]);
+  const [waterMeters, setWaterMeters] = useState<WaterMeter[]>([]);
   const [lastSynced, setLastSynced] = useState<string>(() => localStorage.getItem('society_last_synced') || '');
 
   // Init Data from LocalStorage or Fallbacks
@@ -241,6 +263,13 @@ export default function App() {
     // Initialize Roles and UserAuth tables in LocalStorage / State
     const localRoles = localStorage.getItem('society_roles');
     const localUserAuths = localStorage.getItem('society_user_auths');
+    const localEmergencyContacts = localStorage.getItem('society_emergency_contacts');
+    const localTenants = localStorage.getItem('society_tenants');
+    const localVehicles = localStorage.getItem('society_vehicles');
+    const localGuestParkings = localStorage.getItem('society_guest_parkings');
+    const localDocuments = localStorage.getItem('society_documents');
+    const localAMCs = localStorage.getItem('society_asset_amcs');
+    const localMeters = localStorage.getItem('society_water_meters');
     
     const parsedRoles = getSafeList(localRoles, MULTI_TENANT_ROLES);
     let parsedAuths = getSafeList(localUserAuths, MULTI_TENANT_USER_AUTHS);
@@ -258,6 +287,30 @@ export default function App() {
     setUserAuths(parsedAuths);
     localStorage.setItem('society_roles', JSON.stringify(parsedRoles));
     localStorage.setItem('society_user_auths', JSON.stringify(parsedAuths));
+
+    const parsedEmergencyContacts = getSafeList(localEmergencyContacts, INITIAL_EMERGENCY_CONTACTS);
+    const parsedTenants = getSafeList(localTenants, INITIAL_TENANTS);
+    const parsedVehicles = getSafeList(localVehicles, INITIAL_VEHICLES);
+    const parsedGuestParkings = getSafeList(localGuestParkings, INITIAL_GUEST_PARKINGS);
+    const parsedDocuments = getSafeList(localDocuments, INITIAL_SOCIETY_DOCUMENTS);
+    const parsedAMCs = getSafeList(localAMCs, INITIAL_ASSET_AMCS);
+    const parsedMeters = getSafeList(localMeters, INITIAL_WATER_METERS);
+
+    setEmergencyContacts(parsedEmergencyContacts);
+    setTenants(parsedTenants);
+    setVehicles(parsedVehicles);
+    setGuestParkings(parsedGuestParkings);
+    setSocietyDocuments(parsedDocuments);
+    setAssetAMCs(parsedAMCs);
+    setWaterMeters(parsedMeters);
+
+    localStorage.setItem('society_emergency_contacts', JSON.stringify(parsedEmergencyContacts));
+    localStorage.setItem('society_tenants', JSON.stringify(parsedTenants));
+    localStorage.setItem('society_vehicles', JSON.stringify(parsedVehicles));
+    localStorage.setItem('society_guest_parkings', JSON.stringify(parsedGuestParkings));
+    localStorage.setItem('society_documents', JSON.stringify(parsedDocuments));
+    localStorage.setItem('society_asset_amcs', JSON.stringify(parsedAMCs));
+    localStorage.setItem('society_water_meters', JSON.stringify(parsedMeters));
 
     if (savedUrl && savedKey) {
       setSupabaseUrl(savedUrl);
@@ -310,6 +363,41 @@ export default function App() {
   const updateUserAuthsState = (newUserAuths: UserAuth[]) => {
     setUserAuths(newUserAuths);
     localStorage.setItem('society_user_auths', JSON.stringify(newUserAuths));
+  };
+
+  const updateEmergencyContactsState = (newList: EmergencyContact[]) => {
+    setEmergencyContacts(newList);
+    localStorage.setItem('society_emergency_contacts', JSON.stringify(newList));
+  };
+
+  const updateTenantsState = (newList: Tenant[]) => {
+    setTenants(newList);
+    localStorage.setItem('society_tenants', JSON.stringify(newList));
+  };
+
+  const updateVehiclesState = (newList: Vehicle[]) => {
+    setVehicles(newList);
+    localStorage.setItem('society_vehicles', JSON.stringify(newList));
+  };
+
+  const updateGuestParkingsState = (newList: GuestParking[]) => {
+    setGuestParkings(newList);
+    localStorage.setItem('society_guest_parkings', JSON.stringify(newList));
+  };
+
+  const updateSocietyDocumentsState = (newList: SocietyDocument[]) => {
+    setSocietyDocuments(newList);
+    localStorage.setItem('society_documents', JSON.stringify(newList));
+  };
+
+  const updateAssetAMCsState = (newList: AssetAMC[]) => {
+    setAssetAMCs(newList);
+    localStorage.setItem('society_asset_amcs', JSON.stringify(newList));
+  };
+
+  const updateWaterMetersState = (newList: WaterMeter[]) => {
+    setWaterMeters(newList);
+    localStorage.setItem('society_water_meters', JSON.stringify(newList));
   };
 
   // Connect & Save Supabase Credentials
@@ -410,6 +498,17 @@ export default function App() {
       await clearAndInsert('Invoices', MULTI_TENANT_INVOICES, 'id');
       await clearAndInsert('Visitors', MULTI_TENANT_VISITORS, 'id');
       await clearAndInsert('ComplaintReplies', MULTI_TENANT_COMPLAINT_REPLIES, 'id');
+
+      // Seed Tier 1 tables
+      await clearAndInsert('EmergencyContacts', INITIAL_EMERGENCY_CONTACTS, 'id');
+      await clearAndInsert('Tenants', INITIAL_TENANTS, 'id');
+      await clearAndInsert('Vehicles', INITIAL_VEHICLES, 'id');
+      await clearAndInsert('GuestParking', INITIAL_GUEST_PARKINGS, 'id');
+
+      // Seed Tier 2 tables
+      await clearAndInsert('SocietyDocuments', INITIAL_SOCIETY_DOCUMENTS, 'id');
+      await clearAndInsert('AssetAMCs', INITIAL_ASSET_AMCS, 'id');
+      await clearAndInsert('WaterMeters', INITIAL_WATER_METERS, 'id');
 
       // Seed Roles and UserAuth tables
       await clearAndInsert('Roles', MULTI_TENANT_ROLES, 'id');
@@ -745,6 +844,131 @@ export default function App() {
         updateUserAuthsState(formatted);
       }
 
+      // 12. Fetch EmergencyContacts (Tier 1)
+      const ecData = await safeFetchJson('EmergencyContacts');
+      if (Array.isArray(ecData)) {
+        const formatted: EmergencyContact[] = ecData.map(ec => ({
+          id: String(ec.id),
+          SocietyId: ec.SocietyId || 'greenwood',
+          Name: ec.Name || '',
+          Category: ec.Category || 'Other',
+          Phone: ec.Phone || '',
+          RoleOrTitle: ec.RoleOrTitle || '',
+          IsImportant: ec.IsImportant === true || ec.IsImportant === 'true'
+        }));
+        updateEmergencyContactsState(formatted);
+      }
+
+      // 13. Fetch Tenants (Tier 1)
+      const tenantsData = await safeFetchJson('Tenants');
+      if (Array.isArray(tenantsData)) {
+        const formatted: Tenant[] = tenantsData.map(t => ({
+          id: String(t.id),
+          SocietyId: t.SocietyId || 'greenwood',
+          FlatNo: String(t.FlatNo || ''),
+          TenantName: t.TenantName || '',
+          ContactNo: t.ContactNo || '',
+          Email: t.Email || '',
+          MoveInDate: t.MoveInDate || '',
+          MoveOutDate: t.MoveOutDate || undefined,
+          AgreementDocUrl: t.AgreementDocUrl || undefined,
+          IdProofDocUrl: t.IdProofDocUrl || undefined,
+          KycStatus: t.KycStatus || 'Pending',
+          Remarks: t.Remarks || ''
+        }));
+        updateTenantsState(formatted);
+      }
+
+      // 14. Fetch Vehicles (Tier 1)
+      const vehiclesData = await safeFetchJson('Vehicles');
+      if (Array.isArray(vehiclesData)) {
+        const formatted: Vehicle[] = vehiclesData.map(v => ({
+          id: String(v.id),
+          SocietyId: v.SocietyId || 'greenwood',
+          FlatNo: String(v.FlatNo || ''),
+          OwnerName: v.OwnerName || '',
+          VehicleNo: v.VehicleNo || '',
+          VehicleType: v.VehicleType || '4-Wheeler',
+          ParkingSlotNo: v.ParkingSlotNo || '',
+          StickerIssued: v.StickerIssued === true || v.StickerIssued === 'true'
+        }));
+        updateVehiclesState(formatted);
+      }
+
+      // 15. Fetch GuestParking (Tier 1)
+      const gpData = await safeFetchJson('GuestParking');
+      if (Array.isArray(gpData)) {
+        const formatted: GuestParking[] = gpData.map(gp => ({
+          id: String(gp.id),
+          SocietyId: gp.SocietyId || 'greenwood',
+          FlatNo: String(gp.FlatNo || ''),
+          GuestName: gp.GuestName || '',
+          VehicleNo: gp.VehicleNo || '',
+          VehicleType: gp.VehicleType || '4-Wheeler',
+          AssignedSlot: gp.AssignedSlot || '',
+          ValidFrom: gp.ValidFrom || '',
+          ValidUntil: gp.ValidUntil || '',
+          Status: gp.Status || 'Active'
+        }));
+        updateGuestParkingsState(formatted);
+      }
+
+      // 16. Fetch SocietyDocuments (Tier 2)
+      const docsData = await safeFetchJson('SocietyDocuments');
+      if (Array.isArray(docsData)) {
+        const formatted: SocietyDocument[] = docsData.map(d => ({
+          id: String(d.id),
+          SocietyId: d.SocietyId || 'greenwood',
+          Title: d.Title || '',
+          Category: d.Category || 'General Circulars',
+          DocumentUrl: d.DocumentUrl || '',
+          IsPublic: d.IsPublic === true || d.IsPublic === 'true',
+          UploadedBy: d.UploadedBy || 'Admin',
+          UploadedAt: d.UploadedAt || new Date().toISOString().split('T')[0],
+          FileSize: d.FileSize || '1 MB'
+        })).sort((a,b) => b.UploadedAt.localeCompare(a.UploadedAt));
+        updateSocietyDocumentsState(formatted);
+      }
+
+      // 17. Fetch AssetAMCs (Tier 2)
+      const amcData = await safeFetchJson('AssetAMCs');
+      if (Array.isArray(amcData)) {
+        const formatted: AssetAMC[] = amcData.map(a => ({
+          id: String(a.id),
+          SocietyId: a.SocietyId || 'greenwood',
+          AssetName: a.AssetName || '',
+          AssetType: a.AssetType || 'Lift',
+          VendorName: a.VendorName || '',
+          VendorContact: a.VendorContact || '',
+          ContractStartDate: a.ContractStartDate || '',
+          ContractExpiryDate: a.ContractExpiryDate || '',
+          LastServicedDate: a.LastServicedDate || '',
+          NextServicedDate: a.NextServicedDate || '',
+          ServiceStatus: a.ServiceStatus || 'Operational',
+          StatusNote: a.StatusNote || '',
+          ReportUrl: a.ReportUrl || undefined
+        }));
+        updateAssetAMCsState(formatted);
+      }
+
+      // 18. Fetch WaterMeters (Tier 2)
+      const wmData = await safeFetchJson('WaterMeters');
+      if (Array.isArray(wmData)) {
+        const formatted: WaterMeter[] = wmData.map(w => ({
+          id: String(w.id),
+          SocietyId: w.SocietyId || 'greenwood',
+          FlatNo: String(w.FlatNo || ''),
+          ReadingMonth: w.ReadingMonth || '',
+          PreviousReading: parseFloat(String(w.PreviousReading || 0)) || 0,
+          CurrentReading: parseFloat(String(w.CurrentReading || 0)) || 0,
+          UnitsConsumed: parseFloat(String(w.UnitsConsumed || 0)) || 0,
+          RecordedBy: w.RecordedBy || 'Plumber',
+          RecordedAt: w.RecordedAt || new Date().toISOString().split('T')[0],
+          Status: w.Status || 'Entered'
+        })).sort((a,b) => b.ReadingMonth.localeCompare(a.ReadingMonth));
+        updateWaterMetersState(formatted);
+      }
+
       const timeString = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
       setLastSynced(timeString);
       localStorage.setItem('society_last_synced', timeString);
@@ -1012,7 +1236,8 @@ export default function App() {
     address: string, 
     type: string,
     structureType?: 'standalone' | 'wings' | 'towers_wings',
-    towers?: any[]
+    towers?: any[],
+    features?: FeatureFlags
   ) => {
     const updatedSocieties = societies.map(s => {
       if (s.id === activeSocietyId) {
@@ -1024,7 +1249,8 @@ export default function App() {
           PostalAddress: address,
           BuildingType: type,
           StructureType: structureType || (wingsEnabled ? 'wings' : 'standalone'),
-          Towers: towers
+          Towers: towers,
+          FeaturesEnabled: features || s.FeaturesEnabled
         };
       }
       return s;
@@ -1037,6 +1263,7 @@ export default function App() {
 
     if (supabaseUrl && supabaseAnonKey) {
       try {
+        const targetSoc = updatedSocieties.find(s => s.id === activeSocietyId);
         const payload = {
           id: activeSocietyId,
           Name: name,
@@ -1045,7 +1272,8 @@ export default function App() {
           PostalAddress: address,
           BuildingType: type,
           StructureType: structureType || (wingsEnabled ? 'wings' : 'standalone'),
-          Towers: towers ? JSON.stringify(towers) : null
+          Towers: towers ? JSON.stringify(towers) : null,
+          FeaturesEnabled: targetSoc?.FeaturesEnabled || null
         };
 
         const res = await fetch(`${supabaseUrl}/rest/v1/Societies?id=eq.${activeSocietyId}`, {
@@ -1195,6 +1423,227 @@ export default function App() {
         });
       } catch (err) {
         console.error("Error syncing new notice to Supabase:", err);
+      }
+    }
+  };
+
+  // --- TIER 2 HANDLERS ---
+  const handleAddSocietyDocument = async (doc: Omit<SocietyDocument, 'id' | 'SocietyId' | 'UploadedAt'>) => {
+    const docId = `DOC-${Date.now()}`;
+    const newDoc: SocietyDocument = {
+      ...doc,
+      id: docId,
+      SocietyId: activeSocietyId,
+      UploadedAt: new Date().toISOString().split('T')[0]
+    };
+    const nextDocs = [newDoc, ...societyDocuments];
+    updateSocietyDocumentsState(nextDocs);
+    handleAddAuditLog('Upload Document', `Uploaded society document "${doc.Title}" (${doc.Category})`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/SocietyDocuments`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(newDoc)
+        });
+      } catch (err) {
+        console.error('Failed to post document to Supabase:', err);
+      }
+    }
+  };
+
+  const handleDeleteSocietyDocument = async (id: string) => {
+    const target = societyDocuments.find(d => d.id === id);
+    const nextDocs = societyDocuments.filter(d => d.id !== id);
+    updateSocietyDocumentsState(nextDocs);
+    if (target) {
+      handleAddAuditLog('Delete Document', `Deleted document "${target.Title}"`);
+    }
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/SocietyDocuments?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`
+          }
+        });
+      } catch (err) {
+        console.error('Failed to delete document from Supabase:', err);
+      }
+    }
+  };
+
+  const handleToggleDocumentVisibility = async (id: string) => {
+    const target = societyDocuments.find(d => d.id === id);
+    if (!target) return;
+    const updatedPublic = !target.IsPublic;
+    const nextDocs = societyDocuments.map(d => d.id === id ? { ...d, IsPublic: updatedPublic } : d);
+    updateSocietyDocumentsState(nextDocs);
+    handleAddAuditLog('Toggle Visibility', `Set document "${target.Title}" visibility to ${updatedPublic ? 'Public' : 'Private (Committee Only)'}`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/SocietyDocuments?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ IsPublic: updatedPublic })
+        });
+      } catch (err) {
+        console.error('Failed to patch document visibility in Supabase:', err);
+      }
+    }
+  };
+
+  const handleAddAssetAMC = async (asset: Omit<AssetAMC, 'id' | 'SocietyId'>) => {
+    const amcId = `AMC-${Date.now()}`;
+    const newAsset: AssetAMC = {
+      ...asset,
+      id: amcId,
+      SocietyId: activeSocietyId
+    };
+    const nextAMCs = [newAsset, ...assetAMCs];
+    updateAssetAMCsState(nextAMCs);
+    handleAddAuditLog('Add Asset AMC', `Added asset AMC record for "${asset.AssetName}" (${asset.VendorName})`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/AssetAMCs`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(newAsset)
+        });
+      } catch (err) {
+        console.error('Failed to post Asset AMC to Supabase:', err);
+      }
+    }
+  };
+
+  const handleUpdateAssetAMC = async (id: string, updates: Partial<AssetAMC>) => {
+    const target = assetAMCs.find(a => a.id === id);
+    const nextAMCs = assetAMCs.map(a => a.id === id ? { ...a, ...updates } : a);
+    updateAssetAMCsState(nextAMCs);
+    if (target) {
+      handleAddAuditLog('Update Asset AMC', `Updated AMC servicing status for "${target.AssetName}"`);
+    }
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/AssetAMCs?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updates)
+        });
+      } catch (err) {
+        console.error('Failed to patch Asset AMC in Supabase:', err);
+      }
+    }
+  };
+
+  const handleDeleteAssetAMC = async (id: string) => {
+    const target = assetAMCs.find(a => a.id === id);
+    const nextAMCs = assetAMCs.filter(a => a.id !== id);
+    updateAssetAMCsState(nextAMCs);
+    if (target) {
+      handleAddAuditLog('Delete Asset AMC', `Deleted AMC record for "${target.AssetName}"`);
+    }
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/AssetAMCs?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`
+          }
+        });
+      } catch (err) {
+        console.error('Failed to delete Asset AMC from Supabase:', err);
+      }
+    }
+  };
+
+  const handleAddWaterMeter = async (meter: Omit<WaterMeter, 'id' | 'SocietyId' | 'UnitsConsumed'>) => {
+    const units = Math.max(0, meter.CurrentReading - meter.PreviousReading);
+    const meterId = `WM-${meter.FlatNo}-${meter.ReadingMonth}`;
+    const newMeter: WaterMeter = {
+      ...meter,
+      id: meterId,
+      SocietyId: activeSocietyId,
+      UnitsConsumed: units
+    };
+    const nextMeters = [newMeter, ...waterMeters.filter(w => w.id !== meterId)];
+    updateWaterMetersState(nextMeters);
+    handleAddAuditLog('Log Water Meter', `Recorded water meter reading for Flat ${meter.FlatNo} (${meter.ReadingMonth}): ${units} units consumed`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/WaterMeters`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(newMeter)
+        });
+      } catch (err) {
+        console.error('Failed to post Water Meter to Supabase:', err);
+      }
+    }
+  };
+
+  const handleBatchAddWaterMeters = async (metersList: Array<Omit<WaterMeter, 'id' | 'SocietyId' | 'UnitsConsumed'>>) => {
+    const preparedList: WaterMeter[] = metersList.map(meter => {
+      const units = Math.max(0, meter.CurrentReading - meter.PreviousReading);
+      const meterId = `WM-${meter.FlatNo}-${meter.ReadingMonth}`;
+      return {
+        ...meter,
+        id: meterId,
+        SocietyId: activeSocietyId,
+        UnitsConsumed: units
+      };
+    });
+
+    const updatedMap = new Map(waterMeters.map(w => [w.id, w]));
+    preparedList.forEach(m => updatedMap.set(m.id, m));
+    const nextMeters = Array.from(updatedMap.values()) as WaterMeter[];
+    updateWaterMetersState(nextMeters);
+    handleAddAuditLog('Batch Water Meter Entry', `Saved batch water meter readings for ${preparedList.length} flats`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/WaterMeters`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(preparedList)
+        });
+      } catch (err) {
+        console.error('Failed to post batch Water Meters to Supabase:', err);
       }
     }
   };
@@ -1549,6 +1998,155 @@ export default function App() {
     }
   };
 
+  // Tier 1 Handlers: Emergency Contacts
+  const handleAddEmergencyContact = async (newContact: Omit<EmergencyContact, 'id'>) => {
+    const item: EmergencyContact = { ...newContact, id: `EM-${Date.now()}`, SocietyId: activeSocietyId };
+    const updated = [item, ...emergencyContacts];
+    updateEmergencyContactsState(updated);
+    handleAddAuditLog('Emergency Contact Added', `Added emergency contact ${item.Name} (${item.Phone})`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/EmergencyContacts`, {
+          method: 'POST',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+      } catch (e) { console.error('Failed to post EmergencyContact to Supabase:', e); }
+    }
+  };
+
+  const handleUpdateEmergencyContact = async (idOrContact: string | EmergencyContact, contactUpdates?: Partial<EmergencyContact>) => {
+    let updated: EmergencyContact;
+    if (typeof idOrContact === 'string') {
+      const existing = emergencyContacts.find(c => c.id === idOrContact);
+      if (!existing) return;
+      updated = { ...existing, ...contactUpdates };
+    } else {
+      updated = idOrContact;
+    }
+    const list = emergencyContacts.map(c => c.id === updated.id ? updated : c);
+    updateEmergencyContactsState(list);
+    handleAddAuditLog('Emergency Contact Updated', `Updated emergency contact ${updated.Name}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/EmergencyContacts?id=eq.${updated.id}`, {
+          method: 'PATCH',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        });
+      } catch (e) { console.error('Failed to patch EmergencyContact:', e); }
+    }
+  };
+
+  const handleDeleteEmergencyContact = async (id: string) => {
+    const list = emergencyContacts.filter(c => c.id !== id);
+    updateEmergencyContactsState(list);
+    handleAddAuditLog('Emergency Contact Deleted', `Deleted contact ID ${id}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/EmergencyContacts?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
+        });
+      } catch (e) { console.error('Failed to delete EmergencyContact:', e); }
+    }
+  };
+
+  // Tier 1 Handlers: Tenants & Document KYC
+  const handleAddTenant = async (newTenant: Omit<Tenant, 'id' | 'KycStatus'>) => {
+    const item: Tenant = { ...newTenant, id: `TNT-${Date.now()}`, KycStatus: 'Pending', SocietyId: activeSocietyId };
+    const updated = [item, ...tenants];
+    updateTenantsState(updated);
+    handleAddAuditLog('Tenant Register Added', `Added tenant ${item.TenantName} for Flat ${item.FlatNo}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Tenants`, {
+          method: 'POST',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+      } catch (e) { console.error('Failed to post Tenant to Supabase:', e); }
+    }
+  };
+
+  const handleUpdateTenantKyc = async (id: string, kycStatus: 'Pending' | 'Verified' | 'Rejected', remarks?: string) => {
+    const list = tenants.map(t => t.id === id ? { ...t, KycStatus: kycStatus, Remarks: remarks !== undefined ? remarks : t.Remarks } : t);
+    updateTenantsState(list);
+    handleAddAuditLog('Tenant KYC Updated', `Updated Tenant ID ${id} KYC status to ${kycStatus}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Tenants?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ KycStatus: kycStatus, Remarks: remarks })
+        });
+      } catch (e) { console.error('Failed to patch Tenant KYC:', e); }
+    }
+  };
+
+  // Tier 1 Handlers: Vehicles
+  const handleAddVehicle = async (newVehicle: Omit<Vehicle, 'id'>) => {
+    const item: Vehicle = { ...newVehicle, id: `VEH-${Date.now()}`, SocietyId: activeSocietyId };
+    const updated = [item, ...vehicles];
+    updateVehiclesState(updated);
+    handleAddAuditLog('Vehicle Registered', `Registered vehicle ${item.VehicleNo} (${item.VehicleType}) for Flat ${item.FlatNo}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Vehicles`, {
+          method: 'POST',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+      } catch (e) { console.error('Failed to post Vehicle to Supabase:', e); }
+    }
+  };
+
+  const handleDeleteVehicle = async (id: string) => {
+    const list = vehicles.filter(v => v.id !== id);
+    updateVehiclesState(list);
+    handleAddAuditLog('Vehicle Deleted', `Removed vehicle ID ${id}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Vehicles?id=eq.${id}`, {
+          method: 'DELETE',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}` }
+        });
+      } catch (e) { console.error('Failed to delete Vehicle:', e); }
+    }
+  };
+
+  // Tier 1 Handlers: Guest Parking
+  const handleAddGuestParking = async (newGP: Omit<GuestParking, 'id' | 'Status'>) => {
+    const item: GuestParking = { ...newGP, id: `GP-${Date.now()}`, Status: 'Active', SocietyId: activeSocietyId };
+    const updated = [item, ...guestParkings];
+    updateGuestParkingsState(updated);
+    handleAddAuditLog('Guest Parking Issued', `Assigned guest parking slot ${item.AssignedSlot} to vehicle ${item.VehicleNo} (Flat ${item.FlatNo})`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/GuestParking`, {
+          method: 'POST',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        });
+      } catch (e) { console.error('Failed to post GuestParking to Supabase:', e); }
+    }
+  };
+
+  const handleUpdateGuestParkingStatus = async (id: string, status: 'Active' | 'Expired' | 'Completed') => {
+    const list = guestParkings.map(g => g.id === id ? { ...g, Status: status } : g);
+    updateGuestParkingsState(list);
+    handleAddAuditLog('Guest Parking Status Update', `Updated Guest Parking ID ${id} to ${status}`);
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/GuestParking?id=eq.${id}`, {
+          method: 'PATCH',
+          headers: { 'apikey': supabaseAnonKey, 'Authorization': `Bearer ${supabaseAnonKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ Status: status })
+        });
+      } catch (e) { console.error('Failed to patch GuestParking status:', e); }
+    }
+  };
+
   // Filter datasets dynamically by active society
   const filteredMembers = members.filter(m => m.SocietyId === activeSocietyId);
   const filteredPayments = payments.filter(p => p.SocietyId === activeSocietyId);
@@ -1558,6 +2156,13 @@ export default function App() {
   const filteredInvoices = invoices.filter(i => i.SocietyId === activeSocietyId);
   const filteredVisitors = visitors.filter(v => v.SocietyId === activeSocietyId);
   const filteredComplaintReplies = complaintReplies.filter(r => r.SocietyId === activeSocietyId);
+  const filteredEmergencyContacts = emergencyContacts.filter(e => e.SocietyId === activeSocietyId);
+  const filteredTenants = tenants.filter(t => t.SocietyId === activeSocietyId);
+  const filteredVehicles = vehicles.filter(v => v.SocietyId === activeSocietyId);
+  const filteredGuestParkings = guestParkings.filter(g => g.SocietyId === activeSocietyId);
+  const filteredSocietyDocuments = societyDocuments.filter(d => d.SocietyId === activeSocietyId);
+  const filteredAssetAMCs = assetAMCs.filter(a => a.SocietyId === activeSocietyId);
+  const filteredWaterMeters = waterMeters.filter(w => w.SocietyId === activeSocietyId);
 
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans overflow-hidden transition-colors duration-300`}>
@@ -1569,6 +2174,107 @@ export default function App() {
             onCancel={() => setShowOnboardingWizard(false)} 
             theme={theme}
           />
+        </div>
+      )}
+
+      {/* Cloud Sync & Supabase Setup Modal */}
+      {showCloudSyncModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`w-full max-w-lg ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-800'} rounded-2xl border shadow-2xl p-6 relative space-y-4`}>
+            <button
+              onClick={() => setShowCloudSyncModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 p-1.5 rounded-lg border border-slate-800 hover:bg-slate-800 transition-all cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2.5">
+              <div className="p-2.5 bg-purple-600/20 border border-purple-500/30 rounded-xl text-purple-400">
+                <Cloud className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-extrabold flex items-center gap-2">
+                  Cloud Sync & Supabase Setup
+                </h2>
+                <p className="text-xs text-slate-400">Paste your Supabase URL & Anon Key to sync database tables across mobile apps.</p>
+              </div>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSetSupabaseCredentials(cloudSyncUrlInput, cloudSyncKeyInput);
+                setCloudSyncStatusMsg('Supabase credentials saved and connected!');
+                setTimeout(() => setCloudSyncStatusMsg(null), 3000);
+              }}
+              className="space-y-3 pt-1"
+            >
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Supabase Project URL
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://your-project.supabase.co"
+                  value={cloudSyncUrlInput}
+                  onChange={(e) => setCloudSyncUrlInput(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none ${
+                    theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                  Supabase Anon API Key
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="eyJhbGciOi..."
+                  value={cloudSyncKeyInput}
+                  onChange={(e) => setCloudSyncKeyInput(e.target.value)}
+                  className={`w-full p-2.5 rounded-xl border text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-none ${
+                    theme === 'dark' ? 'bg-slate-950 border-slate-800 text-slate-200' : 'bg-slate-50 border-slate-300 text-slate-800'
+                  }`}
+                />
+              </div>
+
+              {cloudSyncStatusMsg && (
+                <div className="p-2.5 bg-green-950/40 border border-green-500/30 text-green-400 text-xs rounded-xl flex items-center gap-2">
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span>{cloudSyncStatusMsg}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Database className="w-4 h-4" />
+                  <span>Save & Connect Supabase</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const res = await pushMockDataToSupabase();
+                    if (res.success) {
+                      setCloudSyncStatusMsg('Successfully seeded Supabase database!');
+                      setTimeout(() => setCloudSyncStatusMsg(null), 3000);
+                    } else {
+                      setCloudSyncStatusMsg(`Error: ${res.error || 'Failed to seed database'}`);
+                    }
+                  }}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3 py-2.5 rounded-xl text-xs border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Seed Mock Data</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -1600,21 +2306,32 @@ export default function App() {
             {theme === 'dark' ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
           </button>
 
-          <div className={`hidden lg:flex items-center gap-2 text-xs font-semibold ${
-            theme === 'dark' 
-              ? 'text-slate-400 bg-slate-950/50 border-slate-800/80' 
-              : 'text-slate-600 bg-slate-100 border-slate-200 shadow-xs'
-          } px-3.5 py-1.5 rounded-full border transition-all duration-300`}>
-            <Database className="w-3.5 h-3.5 text-purple-400" />
-            <span>Active Storage:</span>
+          <button
+            onClick={() => {
+              setCloudSyncUrlInput(supabaseUrl);
+              setCloudSyncKeyInput(supabaseAnonKey);
+              setShowCloudSyncModal(true);
+            }}
+            id="cloud-sync-btn"
+            className={`hidden lg:flex items-center gap-2 text-xs font-bold ${
+              supabaseAnonKey 
+                ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30 hover:bg-emerald-900/50' 
+                : 'bg-purple-950/40 text-purple-300 border-purple-500/30 hover:bg-purple-900/50'
+            } px-3.5 py-1.5 rounded-full border transition-all duration-300 cursor-pointer shadow-xs`}
+            title="Click to configure Cloud Sync & Supabase Credentials"
+          >
+            <Cloud className="w-3.5 h-3.5 text-purple-400" />
+            <span>☁️ Cloud Sync:</span>
             {supabaseAnonKey ? (
               <span className="text-green-400 flex items-center gap-1 font-mono">
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Supabase Connected
               </span>
             ) : (
-              <span className="text-purple-400 font-mono">Simulated LocalStorage Sandbox</span>
+              <span className="text-purple-300 font-mono flex items-center gap-1">
+                <span>Configure Keys</span> <ArrowRight className="w-3 h-3" />
+              </span>
             )}
-          </div>
+          </button>
         </div>
       </header>
 
@@ -1642,6 +2359,13 @@ export default function App() {
             invoices={filteredInvoices}
             visitors={filteredVisitors}
             complaintReplies={filteredComplaintReplies}
+            emergencyContacts={filteredEmergencyContacts}
+            tenants={filteredTenants}
+            vehicles={filteredVehicles}
+            guestParkings={filteredGuestParkings}
+            societyDocuments={filteredSocietyDocuments}
+            assetAMCs={filteredAssetAMCs}
+            waterMeters={filteredWaterMeters}
             auditLogs={auditLogs.filter(al => al.SocietyId === activeSocietyId)}
             roles={roles}
             userAuths={userAuths}
@@ -1656,6 +2380,23 @@ export default function App() {
             onAddVisitor={handleAddVisitor}
             onUpdateVisitor={handleUpdateVisitorStatus}
             onAddComplaintReply={handleAddComplaintReply}
+            onAddEmergencyContact={handleAddEmergencyContact}
+            onUpdateEmergencyContact={handleUpdateEmergencyContact}
+            onDeleteEmergencyContact={handleDeleteEmergencyContact}
+            onAddTenant={handleAddTenant}
+            onUpdateTenantKyc={handleUpdateTenantKyc}
+            onAddVehicle={handleAddVehicle}
+            onDeleteVehicle={handleDeleteVehicle}
+            onAddGuestParking={handleAddGuestParking}
+            onUpdateGuestParkingStatus={handleUpdateGuestParkingStatus}
+            onAddSocietyDocument={handleAddSocietyDocument}
+            onDeleteSocietyDocument={handleDeleteSocietyDocument}
+            onToggleDocumentVisibility={handleToggleDocumentVisibility}
+            onAddAssetAMC={handleAddAssetAMC}
+            onUpdateAssetAMC={handleUpdateAssetAMC}
+            onDeleteAssetAMC={handleDeleteAssetAMC}
+            onAddWaterMeter={handleAddWaterMeter}
+            onBatchAddWaterMeters={handleBatchAddWaterMeters}
             onRefresh={async () => syncWithSupabase()}
             scriptUrl={supabaseAnonKey ? 'Connected' : ''}
             societyName={societyName}
@@ -1672,6 +2413,7 @@ export default function App() {
             activeSocietyId={activeSocietyId}
             onChangeActiveSociety={(id) => { setActiveSocietyId(id); localStorage.setItem('active_society_id', id); }}
             onCreateSociety={handleCreateSociety}
+            theme={theme}
           />
 
           <div className={`hidden lg:flex flex-col gap-2.5 text-[11px] ${

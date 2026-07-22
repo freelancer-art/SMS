@@ -1,4 +1,4 @@
-import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote } from '../types';
 
 export const INITIAL_MEMBERS: Member[] = [
   {
@@ -941,5 +941,319 @@ export const MULTI_TENANT_USER_AUTHS: UserAuthMock[] = [
     Status: "Active"
   }
 ];
+
+export const INITIAL_EMERGENCY_CONTACTS = [
+  { id: 'EM-1', SocietyId: 'greenwood', Name: 'Police Emergency Helpline', Category: 'Police', Phone: '100', RoleOrTitle: 'National Control Room', IsImportant: true },
+  { id: 'EM-2', SocietyId: 'greenwood', Name: 'Ambulance & Medical Emergency', Category: 'Ambulance', Phone: '108', RoleOrTitle: 'State Emergency Services', IsImportant: true },
+  { id: 'EM-3', SocietyId: 'greenwood', Name: 'Fire Station Control Room', Category: 'Fire', Phone: '101', RoleOrTitle: 'Central Station', IsImportant: true },
+  { id: 'EM-4', SocietyId: 'greenwood', Name: 'City General Hospital (24x7)', Category: 'Hospital', Phone: '+91 22 2650 1111', RoleOrTitle: 'Trauma & ER Desk', IsImportant: true },
+  { id: 'EM-5', SocietyId: 'greenwood', Name: 'Main Gate Security Gatekeeper', Category: 'Security', Phone: '+91 98200 11223', RoleOrTitle: 'Head Security Officer', IsImportant: true },
+  { id: 'EM-6', SocietyId: 'greenwood', Name: 'Ramesh Electricity Service', Category: 'Electrician', Phone: '+91 98201 44556', RoleOrTitle: 'On-call Electrician', IsImportant: false },
+  { id: 'EM-7', SocietyId: 'greenwood', Name: 'QuickFix Plumbing Specialist', Category: 'Plumber', Phone: '+91 98202 77889', RoleOrTitle: 'Licensed Plumber', IsImportant: false },
+  { id: 'EM-8', SocietyId: 'greenwood', Name: 'Amit Sharma (Secretary)', Category: 'Committee', Phone: '+91 98765 43210', RoleOrTitle: 'Society Secretary', IsImportant: true },
+  { id: 'EM-9', SocietyId: 'greenwood', Name: 'Priya Patel (Treasurer)', Category: 'Committee', Phone: '+91 98765 12345', RoleOrTitle: 'Society Treasurer', IsImportant: false }
+];
+
+export const INITIAL_TENANTS = [
+  {
+    id: 'TNT-1',
+    SocietyId: 'greenwood',
+    FlatNo: '103',
+    TenantName: 'Rajesh Kumar',
+    ContactNo: '+91 98234 56789',
+    Email: 'rajesh.tenant@example.com',
+    MoveInDate: '2025-01-15',
+    MoveOutDate: '2026-12-31',
+    AgreementDocUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IdProofDocUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    KycStatus: 'Verified' as const,
+    Remarks: 'Rent agreement verified for 22 months'
+  },
+  {
+    id: 'TNT-2',
+    SocietyId: 'greenwood',
+    FlatNo: '202',
+    TenantName: 'Anjali Gupta',
+    ContactNo: '+91 99887 76655',
+    Email: 'anjali.g@example.com',
+    MoveInDate: '2025-06-01',
+    AgreementDocUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IdProofDocUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    KycStatus: 'Pending' as const,
+    Remarks: 'Submitted police verification form pending secretary signoff'
+  },
+  {
+    id: 'TNT-3',
+    SocietyId: 'greenwood',
+    FlatNo: '302',
+    TenantName: 'Siddharth Shah',
+    ContactNo: '+91 95544 33221',
+    Email: 'sidd.shah@example.com',
+    MoveInDate: '2026-02-10',
+    AgreementDocUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IdProofDocUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    KycStatus: 'Verified' as const,
+    Remarks: 'Police verification copy on file'
+  }
+];
+
+export const INITIAL_VEHICLES = [
+  {
+    id: 'VEH-1',
+    SocietyId: 'greenwood',
+    FlatNo: '101',
+    OwnerName: 'Amit Sharma',
+    VehicleNo: 'MH-02-AB-1234',
+    VehicleType: '4-Wheeler' as const,
+    ParkingSlotNo: 'A-101',
+    StickerIssued: true
+  },
+  {
+    id: 'VEH-2',
+    SocietyId: 'greenwood',
+    FlatNo: '101',
+    OwnerName: 'Sunita Sharma',
+    VehicleNo: 'MH-02-SC-8899',
+    VehicleType: '2-Wheeler' as const,
+    ParkingSlotNo: 'A-101-B',
+    StickerIssued: true
+  },
+  {
+    id: 'VEH-3',
+    SocietyId: 'greenwood',
+    FlatNo: '102',
+    OwnerName: 'Priya Patel',
+    VehicleNo: 'MH-02-CD-5678',
+    VehicleType: '4-Wheeler' as const,
+    ParkingSlotNo: 'B-204',
+    StickerIssued: true
+  },
+  {
+    id: 'VEH-4',
+    SocietyId: 'greenwood',
+    FlatNo: '103',
+    OwnerName: 'Rajesh Kumar',
+    VehicleNo: 'MH-02-XY-9012',
+    VehicleType: '2-Wheeler' as const,
+    ParkingSlotNo: 'S-12',
+    StickerIssued: true
+  },
+  {
+    id: 'VEH-5',
+    SocietyId: 'greenwood',
+    FlatNo: '201',
+    OwnerName: 'Vikram Singh',
+    VehicleNo: 'MH-02-VS-2010',
+    VehicleType: '4-Wheeler' as const,
+    ParkingSlotNo: 'C-301',
+    StickerIssued: true
+  }
+];
+
+export const INITIAL_GUEST_PARKINGS = [
+  {
+    id: 'GP-1',
+    SocietyId: 'greenwood',
+    FlatNo: '101',
+    GuestName: 'Anil Sharma (Brother)',
+    VehicleNo: 'DL-01-AB-5678',
+    VehicleType: '4-Wheeler' as const,
+    AssignedSlot: 'Visitor Slot V-03',
+    ValidFrom: '2026-07-21T08:00:00',
+    ValidUntil: '2026-07-21T22:00:00',
+    Status: 'Active' as const
+  },
+  {
+    id: 'GP-2',
+    SocietyId: 'greenwood',
+    FlatNo: '201',
+    GuestName: 'Renu Singh Guest',
+    VehicleNo: 'MH-12-KL-8899',
+    VehicleType: '4-Wheeler' as const,
+    AssignedSlot: 'Visitor Slot V-01',
+    ValidFrom: '2026-07-20T10:00:00',
+    ValidUntil: '2026-07-20T20:00:00',
+    Status: 'Expired' as const
+  }
+];
+
+export const INITIAL_SOCIETY_DOCUMENTS: SocietyDocument[] = [
+  {
+    id: 'DOC-1',
+    SocietyId: 'greenwood',
+    Title: 'Registered Society Bye-Laws & Model Rules 2024',
+    Category: 'Building Rules',
+    DocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IsPublic: true,
+    UploadedBy: 'Amit Sharma (Secretary)',
+    UploadedAt: '2026-01-10',
+    FileSize: '2.4 MB'
+  },
+  {
+    id: 'DOC-2',
+    SocietyId: 'greenwood',
+    Title: 'AGM 2025-26 Official Minutes of Meeting & Resolution',
+    Category: 'AGM Minutes',
+    DocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IsPublic: true,
+    UploadedBy: 'Amit Sharma (Secretary)',
+    UploadedAt: '2026-06-30',
+    FileSize: '1.1 MB'
+  },
+  {
+    id: 'DOC-3',
+    SocietyId: 'greenwood',
+    Title: 'Annual Financial Audit Report FY 2025-26',
+    Category: 'Financial Audits',
+    DocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IsPublic: true,
+    UploadedBy: 'Priya Patel (Treasurer)',
+    UploadedAt: '2026-05-15',
+    FileSize: '3.8 MB'
+  },
+  {
+    id: 'DOC-4',
+    SocietyId: 'greenwood',
+    Title: 'Conveyance Deed & Land Registration Certificate',
+    Category: 'Legal Documents',
+    DocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IsPublic: false, // Committee only
+    UploadedBy: 'Management Committee',
+    UploadedAt: '2025-08-20',
+    FileSize: '5.2 MB'
+  },
+  {
+    id: 'DOC-5',
+    SocietyId: 'greenwood',
+    Title: 'Monsoon Waste Management & Garbage Segregation Circular',
+    Category: 'General Circulars',
+    DocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    IsPublic: true,
+    UploadedBy: 'Amit Sharma (Secretary)',
+    UploadedAt: '2026-07-01',
+    FileSize: '450 KB'
+  }
+];
+
+export const INITIAL_ASSET_AMCS: AssetAMC[] = [
+  {
+    id: 'AMC-1',
+    SocietyId: 'greenwood',
+    AssetName: 'Lift #1 (Wing A Schindler Elevator)',
+    AssetType: 'Lift',
+    VendorName: 'Schindler Elevator India Pvt Ltd',
+    VendorContact: '+91 22 6100 8800',
+    ContractStartDate: '2026-01-01',
+    ContractExpiryDate: '2026-12-31',
+    LastServicedDate: '2026-07-15',
+    NextServicedDate: '2026-08-15',
+    ServiceStatus: 'Operational',
+    StatusNote: 'All safety cables & brakes checked. All Lifts Operational.',
+    ReportUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+  },
+  {
+    id: 'AMC-2',
+    SocietyId: 'greenwood',
+    AssetName: 'Lift #2 (Wing B OTIS Elevator)',
+    AssetType: 'Lift',
+    VendorName: 'OTIS Elevators Pvt Ltd',
+    VendorContact: '+91 22 2850 4433',
+    ContractStartDate: '2026-04-01',
+    ContractExpiryDate: '2027-03-31',
+    LastServicedDate: '2026-06-20',
+    NextServicedDate: '2026-07-25',
+    ServiceStatus: 'Operational',
+    StatusNote: 'Regular quarterly lubrication complete.',
+    ReportUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+  },
+  {
+    id: 'AMC-3',
+    SocietyId: 'greenwood',
+    AssetName: 'Overhead & Underground Water Tank System',
+    AssetType: 'Water Tank',
+    VendorName: 'AquaClean Professional Tank Hygiene',
+    VendorContact: '+91 98200 99887',
+    ContractStartDate: '2026-01-01',
+    ContractExpiryDate: '2026-12-31',
+    LastServicedDate: '2026-07-10',
+    NextServicedDate: '2026-10-10',
+    ServiceStatus: 'Operational',
+    StatusNote: 'Deep scrubbing & UV disinfection completed on July 10. Next scheduled Oct 2026.',
+    ReportUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+  },
+  {
+    id: 'AMC-4',
+    SocietyId: 'greenwood',
+    AssetName: 'Diesel Generator (Backup DG Set 125 KVA)',
+    AssetType: 'Generator',
+    VendorName: 'Cummins India Power Systems',
+    VendorContact: '+91 98201 11223',
+    ContractStartDate: '2025-11-01',
+    ContractExpiryDate: '2026-10-31',
+    LastServicedDate: '2026-05-18',
+    NextServicedDate: '2026-08-18',
+    ServiceStatus: 'Operational',
+    StatusNote: 'Fuel filter changed. Engine health 98%.',
+    ReportUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+  }
+];
+
+export const INITIAL_WATER_METERS: WaterMeter[] = [
+  // July 2026
+  { id: 'WM-101-2026-07', SocietyId: 'greenwood', FlatNo: '101', ReadingMonth: '2026-07', PreviousReading: 1240, CurrentReading: 1285, UnitsConsumed: 45, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-102-2026-07', SocietyId: 'greenwood', FlatNo: '102', ReadingMonth: '2026-07', PreviousReading: 980, CurrentReading: 1018, UnitsConsumed: 38, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-103-2026-07', SocietyId: 'greenwood', FlatNo: '103', ReadingMonth: '2026-07', PreviousReading: 1150, CurrentReading: 1202, UnitsConsumed: 52, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-201-2026-07', SocietyId: 'greenwood', FlatNo: '201', ReadingMonth: '2026-07', PreviousReading: 1400, CurrentReading: 1442, UnitsConsumed: 42, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-202-2026-07', SocietyId: 'greenwood', FlatNo: '202', ReadingMonth: '2026-07', PreviousReading: 890, CurrentReading: 925, UnitsConsumed: 35, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-203-2026-07', SocietyId: 'greenwood', FlatNo: '203', ReadingMonth: '2026-07', PreviousReading: 1310, CurrentReading: 1358, UnitsConsumed: 48, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-301-2026-07', SocietyId: 'greenwood', FlatNo: '301', ReadingMonth: '2026-07', PreviousReading: 1050, CurrentReading: 1088, UnitsConsumed: 38, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+  { id: 'WM-302-2026-07', SocietyId: 'greenwood', FlatNo: '302', ReadingMonth: '2026-07', PreviousReading: 1600, CurrentReading: 1665, UnitsConsumed: 65, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-07-01', Status: 'Entered' },
+
+  // June 2026
+  { id: 'WM-101-2026-06', SocietyId: 'greenwood', FlatNo: '101', ReadingMonth: '2026-06', PreviousReading: 1198, CurrentReading: 1240, UnitsConsumed: 42, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-06-01', Status: 'Billed' },
+  { id: 'WM-102-2026-06', SocietyId: 'greenwood', FlatNo: '102', ReadingMonth: '2026-06', PreviousReading: 945, CurrentReading: 980, UnitsConsumed: 35, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-06-01', Status: 'Billed' },
+  { id: 'WM-103-2026-06', SocietyId: 'greenwood', FlatNo: '103', ReadingMonth: '2026-06', PreviousReading: 1100, CurrentReading: 1150, UnitsConsumed: 50, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-06-01', Status: 'Billed' },
+
+  // May 2026
+  { id: 'WM-101-2026-05', SocietyId: 'greenwood', FlatNo: '101', ReadingMonth: '2026-05', PreviousReading: 1150, CurrentReading: 1198, UnitsConsumed: 48, RecordedBy: 'Sanjay Plumber', RecordedAt: '2026-05-01', Status: 'Billed' }
+];
+
+export const INITIAL_POLLS: Poll[] = [
+  {
+    id: 'POLL-1',
+    SocietyId: 'greenwood',
+    Title: 'Approve ₹500,000 Special Maintenance Budget for Entrance Lobby Renovation',
+    Description: 'Proposal to allocate ₹5 Lakhs from reserve funds for marble flooring, LED lighting, and digital access gate upgrade.',
+    Category: 'AGM Resolution',
+    StartDate: '2026-07-01',
+    EndDate: '2026-07-31',
+    CreatedBy: 'Amit Sharma (Secretary)',
+    Status: 'Active',
+    TotalEligibleFlats: 8
+  },
+  {
+    id: 'POLL-2',
+    SocietyId: 'greenwood',
+    Title: 'Mandatory Electric Vehicle (EV) Charging Infrastructure Bylaws',
+    Description: 'Approve installation of 4 shared EV fast-charging stations in visitor parking with sub-meter billing per unit consumed.',
+    Category: 'Rule Change',
+    StartDate: '2026-07-10',
+    EndDate: '2026-08-10',
+    CreatedBy: 'Management Committee',
+    Status: 'Active',
+    TotalEligibleFlats: 8
+  }
+];
+
+export const INITIAL_POLL_VOTES: PollVote[] = [
+  { id: 'PV-1', PollId: 'POLL-1', SocietyId: 'greenwood', FlatNo: '101', VotedBy: 'Amit Sharma', Vote: 'In Favor', Timestamp: '2026-07-05T10:15:00.000Z' },
+  { id: 'PV-2', PollId: 'POLL-1', SocietyId: 'greenwood', FlatNo: '102', VotedBy: 'Priya Patel', Vote: 'In Favor', Timestamp: '2026-07-06T14:20:00.000Z' },
+  { id: 'PV-3', PollId: 'POLL-1', SocietyId: 'greenwood', FlatNo: '201', VotedBy: 'Vikram Singh', Vote: 'Against', Timestamp: '2026-07-07T09:30:00.000Z' },
+  { id: 'PV-4', PollId: 'POLL-1', SocietyId: 'greenwood', FlatNo: '301', VotedBy: 'Neha Joshi', Vote: 'In Favor', Timestamp: '2026-07-08T16:45:00.000Z' },
+  { id: 'PV-5', PollId: 'POLL-2', SocietyId: 'greenwood', FlatNo: '101', VotedBy: 'Amit Sharma', Vote: 'In Favor', Timestamp: '2026-07-12T11:00:00.000Z' },
+  { id: 'PV-6', PollId: 'POLL-2', SocietyId: 'greenwood', FlatNo: '201', VotedBy: 'Vikram Singh', Vote: 'Abstain', Timestamp: '2026-07-13T15:10:00.000Z' }
+];
+
+
 
 
