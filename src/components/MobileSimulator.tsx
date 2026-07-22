@@ -99,6 +99,8 @@ interface MobileSimulatorProps {
     attachmentUrl?: string; 
     attachmentName?: string; 
     attachmentSize?: string;
+    documentUrl?: string;
+    uploadedBy?: string;
   }) => void;
   onAddInvoice?: (invoice: Omit<Invoice, 'id'>) => void;
   onAddVisitor?: (visitor: Omit<Visitor, 'id'>) => void;
@@ -2154,7 +2156,14 @@ export default function MobileSimulator({
                                 return myVisitors.slice(0, 3).map(v => (
                                   <div key={v.id} className="p-2 bg-slate-50 border border-slate-100 rounded-xl flex justify-between items-center text-[10px]">
                                     <div className="min-w-0 pr-2">
-                                      <h5 className="font-extrabold text-slate-800 truncate">{v.VisitorName}</h5>
+                                      <div className="flex items-center gap-1.5">
+                                        <h5 className="font-extrabold text-slate-800 truncate">{v.VisitorName}</h5>
+                                        {v.AccessToken && (
+                                          <span className="text-[7.5px] bg-purple-100 text-purple-800 font-mono font-bold px-1.5 py-0.2 rounded border border-purple-200">
+                                            🔑 {v.AccessToken}
+                                          </span>
+                                        )}
+                                      </div>
                                       <p className="text-[8px] text-slate-400 mt-0.5 font-semibold">
                                         {v.Purpose} • {v.CheckOutTime ? `Checked Out: ${new Date(v.CheckOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : `In: ${new Date(v.CheckInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                                       </p>
@@ -3347,7 +3356,7 @@ export default function MobileSimulator({
                   <div className="space-y-2.5">
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Bulletins</span>
-                      {userRole === 'Admin' && (
+                      {(userRole === 'Admin' || userRole === 'Committee Member') && (
                         <button
                           onClick={() => {
                             setNewNoticeTitle('');
@@ -3361,7 +3370,7 @@ export default function MobileSimulator({
                           className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-[9px] font-black tracking-wide transition-all flex items-center gap-1 shadow-xs cursor-pointer active:scale-95"
                         >
                           <Plus className="w-3 h-3" />
-                          <span>Draft Notice</span>
+                          <span>Draft / Upload Notice</span>
                         </button>
                       )}
                     </div>
@@ -4327,6 +4336,9 @@ export default function MobileSimulator({
                   }
 
                   if (onAddVisitor) {
+                    const token = generateVisitorAccessToken();
+                    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
                     onAddVisitor({
                       VisitorName: newVisName.trim(),
                       Purpose: newVisPurpose,
@@ -4335,10 +4347,12 @@ export default function MobileSimulator({
                       VehicleNo: newVisVehicle.trim() || undefined,
                       Status: 'Pre-Approved',
                       CheckInTime: new Date().toISOString(),
-                      SocietyId: activeSocietyId
+                      SocietyId: activeSocietyId,
+                      AccessToken: token,
+                      TokenExpiresAt: expiresAt
                     });
 
-                    triggerToast(`Pre-approved guest ${newVisName.trim()} successfully!`);
+                    triggerToast(`Pre-approved guest ${newVisName.trim()} with token ${token}!`);
                     setShowAddVisitorModal(false);
                     setNewVisName('');
                     setNewVisContact('');
@@ -4439,7 +4453,9 @@ export default function MobileSimulator({
                       content: newNoticeContent,
                       attachmentUrl: newNoticeFileUrl,
                       attachmentName: newNoticeFileName,
-                      attachmentSize: newNoticeFileSize
+                      attachmentSize: newNoticeFileSize,
+                      documentUrl: newNoticeFileUrl,
+                      uploadedBy: userRole === 'Admin' ? 'Admin Secretary' : 'Committee Member'
                     });
                     triggerToast('Notice broadcast successfully!');
                     setIsBroadcastModalOpen(false);

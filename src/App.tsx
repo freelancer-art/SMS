@@ -1157,6 +1157,8 @@ export default function App() {
     attachmentUrl?: string; 
     attachmentName?: string; 
     attachmentSize?: string;
+    documentUrl?: string;
+    uploadedBy?: string;
   }) => {
     const noticeId = `N-${Date.now()}`;
     const newNotice: Notice = {
@@ -1166,10 +1168,12 @@ export default function App() {
       Title: noticeData.title,
       Category: noticeData.category as any,
       Content: noticeData.content,
-      AttachmentUrl: noticeData.attachmentUrl || "",
+      AttachmentUrl: noticeData.attachmentUrl || noticeData.documentUrl || "",
       AttachmentName: noticeData.attachmentName || "",
       AttachmentSize: noticeData.attachmentSize || "",
-      PostedBy: 'Society Management Committee'
+      PostedBy: noticeData.uploadedBy || 'Society Management Committee',
+      DocumentUrl: noticeData.documentUrl || noticeData.attachmentUrl || "",
+      UploadedBy: noticeData.uploadedBy || 'Management Committee'
     };
     const nextNotices = [newNotice, ...notices];
     setNotices(nextNotices);
@@ -1429,9 +1433,14 @@ export default function App() {
   // 2. Add Visitor Handler (Gatekeeper Simulator)
   const handleAddVisitor = async (newVis: Omit<Visitor, 'id'>) => {
     const visId = `VIS-${Date.now()}`;
+    const token = newVis.AccessToken || generateVisitorAccessToken();
+    const expiresAt = newVis.TokenExpiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
     const loggedVisitor: Visitor = {
       ...newVis,
-      id: visId
+      id: visId,
+      AccessToken: token,
+      TokenExpiresAt: expiresAt
     };
 
     const nextVisitors = [loggedVisitor, ...visitors];
