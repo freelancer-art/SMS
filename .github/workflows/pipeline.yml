@@ -72,11 +72,15 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
+
       - name: Build Android APK
         run: |
           cd android
-          gradle wrapper --gradle-version 8.7
-          ./gradlew assembleDebug
+          gradle assembleDebug
 
       - name: Upload to Firebase App Distribution
         uses: w9jds/firebase-action@v11.16.0
