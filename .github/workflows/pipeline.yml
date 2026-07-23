@@ -68,7 +68,7 @@ jobs:
       - name: Setup Capacitor & Add Android Platform
         run: |
           npm install @capacitor/core @capacitor/android @capacitor/cli
-          npx cap init "HousingSocietyApp" "com.aistudio.housingsociety" --web-dir "dist"
+          npx cap init "HousingSocietyApp" "com.housing.society" --web-dir "dist"
           npx cap add android
           npx cap sync android
 
@@ -96,10 +96,9 @@ jobs:
             --app "$FIREBASE_APP_ID" \
             --groups "testers" \
             --release-notes "Automated CI/CD build triggered by commit ${{ github.sha }}" || {
-              echo "::error ::Firebase App Distribution upload failed with HTTP 403 permission error."
-              echo "To fix this, ensure your Service Account has the 'Firebase App Distribution Admin' role assigned in GCP Console."
+              EXIT_CODE=$?
               rm -f service-account.json
-              exit 1
+              exit $EXIT_CODE
             }
           rm -f service-account.json
         env:
