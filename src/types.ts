@@ -85,10 +85,81 @@ export interface Expense {
   SocietyId?: string;
   Date: string;
   Category: 'Maintenance' | 'Security' | 'Water' | 'Electricity' | 'Repairs' | 'Gardening' | 'Salary' | 'Others';
+  Title?: string;
   Amount: number;
   Vendor: string;
+  VendorName?: string;
   InvoiceNo?: string;
   ApprovedBy?: string;
+  Status?: 'Approved' | 'Pending Approval' | 'Rejected' | 'Paid';
+  VendorId?: string;
+  RequiresDualApproval?: boolean;
+  SecretaryApproved?: boolean;
+  ApprovedBySecretary?: boolean;
+  SecretaryApprovedBy?: string;
+  SecretaryApprovedAt?: string;
+  TreasurerApproved?: boolean;
+  ApprovedByTreasurer?: boolean;
+  TreasurerApprovedBy?: string;
+  TreasurerApprovedAt?: string;
+  RejectionReason?: string;
+}
+
+export interface Staff {
+  id: string;
+  SocietyId: string;
+  Name: string;
+  Phone: string;
+  ServiceType: 'Maid' | 'Cook' | 'Driver' | 'Cleaner' | 'Security Guard' | 'Gardener' | 'Electrician' | 'Plumber' | string;
+  PhotoUrl?: string;
+  Passcode?: string;
+  IdVerificationStatus: 'Verified' | 'Pending' | 'Rejected';
+  IdProofType?: 'Aadhaar' | 'PAN' | 'Voter ID' | 'Driving License';
+  IdProofNumber?: string;
+  AssignedFlats: string[];
+  GateStatus?: 'Inside' | 'Checked Out';
+  Status: 'Active' | 'Inactive';
+  CreatedAt?: string;
+}
+
+export interface StaffAttendance {
+  id: string;
+  SocietyId: string;
+  StaffId: string;
+  StaffName: string;
+  ServiceType: string;
+  AssignedFlats?: string[];
+  GateName?: string;
+  CheckInTime: string;
+  CheckOutTime?: string | null;
+  Date: string;
+  PasscodeUsed?: string;
+  GatekeeperName?: string;
+  Status: 'Inside' | 'Checked Out';
+}
+
+export interface Vendor {
+  id: string;
+  SocietyId: string;
+  Name?: string;
+  VendorName?: string;
+  ServiceCategory: string;
+  GstNumber?: string;
+  Phone: string;
+  Email?: string;
+  ContactPerson?: string;
+  BankAccountNumber?: string;
+  AccountNumber?: string;
+  BankIfsc?: string;
+  IfscCode?: string;
+  BankName?: string;
+  ContractDocumentUrl?: string;
+  ContractDocUrl?: string;
+  ContractEndDate?: string;
+  Status: 'Active' | 'Blacklisted' | 'Inactive';
+  Rating?: number;
+  Notes?: string;
+  CreatedAt?: string;
 }
 
 export interface Complaint {
@@ -320,9 +391,12 @@ export interface PollVote {
   PollId: string;
   SocietyId: string;
   FlatNo: string;
-  VotedBy: string;
-  Vote: 'In Favor' | 'Against' | 'Abstain';
-  Timestamp: string;
+  VotedBy?: string;
+  MemberName?: string;
+  Vote?: 'In Favor' | 'Against' | 'Abstain';
+  SelectedOption?: 'In Favor' | 'Against' | 'Abstain' | 'Yes' | 'No' | string;
+  Timestamp?: string;
+  VotedAt?: string;
 }
 
 

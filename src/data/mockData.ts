@@ -1,4 +1,4 @@
-import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote, Staff, StaffAttendance, Vendor } from '../types';
 
 export const INITIAL_MEMBERS: Member[] = [
   {
@@ -259,7 +259,14 @@ export const INITIAL_EXPENSES: Expense[] = [
     Amount: 12000,
     Vendor: "Apex Guard Services",
     InvoiceNo: "INV-2026-102",
-    ApprovedBy: "Society Committee"
+    ApprovedBy: "Secretary (Pending Treasurer)",
+    Status: "Pending Approval",
+    VendorId: "VEND-1",
+    RequiresDualApproval: true,
+    SecretaryApproved: true,
+    SecretaryApprovedBy: "Amit Sharma (Secretary)",
+    SecretaryApprovedAt: "2026-07-16T11:30:00",
+    TreasurerApproved: false
   },
   {
     id: "E-102",
@@ -268,7 +275,11 @@ export const INITIAL_EXPENSES: Expense[] = [
     Amount: 4520,
     Vendor: "MSEDCL Electric",
     InvoiceNo: "ELEC-JUL-9923",
-    ApprovedBy: "Secretary"
+    ApprovedBy: "Secretary",
+    Status: "Approved",
+    RequiresDualApproval: false,
+    SecretaryApproved: true,
+    TreasurerApproved: true
   },
   {
     id: "E-103",
@@ -277,7 +288,23 @@ export const INITIAL_EXPENSES: Expense[] = [
     Amount: 3200,
     Vendor: "AquaFlow Tankers",
     InvoiceNo: "WT-4028",
-    ApprovedBy: "Treasurer"
+    ApprovedBy: "Treasurer",
+    Status: "Approved",
+    RequiresDualApproval: false
+  },
+  {
+    id: "E-106",
+    Date: "2026-07-20",
+    Category: "Repairs",
+    Amount: 18500,
+    Vendor: "Schindler Elevator India Pvt Ltd",
+    InvoiceNo: "SCH-INV-8821",
+    ApprovedBy: "Pending Dual Signoff",
+    Status: "Pending Approval",
+    VendorId: "VEND-2",
+    RequiresDualApproval: true,
+    SecretaryApproved: false,
+    TreasurerApproved: false
   },
   {
     id: "E-104",
@@ -816,7 +843,7 @@ export const MULTI_TENANT_VISITORS: Visitor[] = [
 export const MULTI_TENANT_COMPLAINT_REPLIES: ComplaintReply[] = [
   {
     id: "REP-greenwood-0",
-    ComplaintId: "C-greenwood-0",
+    ComplaintId: "C-101",
     SocietyId: "greenwood",
     SenderName: "Amit Sharma (Secretary)",
     SenderRole: "Admin",
@@ -825,7 +852,7 @@ export const MULTI_TENANT_COMPLAINT_REPLIES: ComplaintReply[] = [
   },
   {
     id: "REP-greenwood-1",
-    ComplaintId: "C-greenwood-0",
+    ComplaintId: "C-101",
     SocietyId: "greenwood",
     SenderName: "Karan Johar (Resident)",
     SenderRole: "Member",
@@ -1252,6 +1279,155 @@ export const INITIAL_POLL_VOTES: PollVote[] = [
   { id: 'PV-4', PollId: 'POLL-1', SocietyId: 'greenwood', FlatNo: '301', VotedBy: 'Neha Joshi', Vote: 'In Favor', Timestamp: '2026-07-08T16:45:00.000Z' },
   { id: 'PV-5', PollId: 'POLL-2', SocietyId: 'greenwood', FlatNo: '101', VotedBy: 'Amit Sharma', Vote: 'In Favor', Timestamp: '2026-07-12T11:00:00.000Z' },
   { id: 'PV-6', PollId: 'POLL-2', SocietyId: 'greenwood', FlatNo: '201', VotedBy: 'Vikram Singh', Vote: 'Abstain', Timestamp: '2026-07-13T15:10:00.000Z' }
+];
+
+export const INITIAL_STAFF: Staff[] = [
+  {
+    id: 'STF-101',
+    SocietyId: 'greenwood',
+    Name: 'Sita Devi',
+    Phone: '+91 98192 88301',
+    ServiceType: 'Maid',
+    PhotoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
+    Passcode: '1234',
+    IdVerificationStatus: 'Verified',
+    IdProofType: 'Aadhaar',
+    IdProofNumber: 'XXXX-XXXX-8921',
+    AssignedFlats: ['101', '102', '201'],
+    Status: 'Active',
+    CreatedAt: '2025-02-10'
+  },
+  {
+    id: 'STF-102',
+    SocietyId: 'greenwood',
+    Name: 'Ramesh Sawant',
+    Phone: '+91 98201 44556',
+    ServiceType: 'Driver',
+    PhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    Passcode: '5678',
+    IdVerificationStatus: 'Verified',
+    IdProofType: 'Driving License',
+    IdProofNumber: 'MH02-2021-009923',
+    AssignedFlats: ['101'],
+    Status: 'Active',
+    CreatedAt: '2025-03-15'
+  },
+  {
+    id: 'STF-103',
+    SocietyId: 'greenwood',
+    Name: 'Kamla Bai',
+    Phone: '+91 97690 12345',
+    ServiceType: 'Cook',
+    PhotoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
+    Passcode: '2468',
+    IdVerificationStatus: 'Verified',
+    IdProofType: 'Aadhaar',
+    IdProofNumber: 'XXXX-XXXX-1144',
+    AssignedFlats: ['102', '202', '301'],
+    Status: 'Active',
+    CreatedAt: '2025-05-01'
+  },
+  {
+    id: 'STF-104',
+    SocietyId: 'greenwood',
+    Name: 'Babu Lal',
+    Phone: '+91 98334 99120',
+    ServiceType: 'Cleaner',
+    PhotoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    Passcode: '1357',
+    IdVerificationStatus: 'Pending',
+    IdProofType: 'Voter ID',
+    IdProofNumber: 'ABC1234567',
+    AssignedFlats: ['203', '302'],
+    Status: 'Active',
+    CreatedAt: '2026-06-10'
+  }
+];
+
+export const INITIAL_STAFF_ATTENDANCE: StaffAttendance[] = [
+  {
+    id: 'ATT-1',
+    SocietyId: 'greenwood',
+    StaffId: 'STF-101',
+    StaffName: 'Sita Devi',
+    ServiceType: 'Maid',
+    CheckInTime: '2026-07-22T08:30:00',
+    CheckOutTime: null,
+    Date: '2026-07-22',
+    PasscodeUsed: '1234',
+    GatekeeperName: 'Main Gate Security',
+    Status: 'Inside'
+  },
+  {
+    id: 'ATT-2',
+    SocietyId: 'greenwood',
+    StaffId: 'STF-102',
+    StaffName: 'Ramesh Sawant',
+    ServiceType: 'Driver',
+    CheckInTime: '2026-07-22T08:00:00',
+    CheckOutTime: '2026-07-22T13:00:00',
+    Date: '2026-07-22',
+    PasscodeUsed: '5678',
+    GatekeeperName: 'Main Gate Security',
+    Status: 'Checked Out'
+  }
+];
+
+export const INITIAL_VENDORS: Vendor[] = [
+  {
+    id: 'VEND-1',
+    SocietyId: 'greenwood',
+    Name: 'Apex Guard Services Pvt Ltd',
+    VendorName: 'Apex Guard Services Pvt Ltd',
+    ServiceCategory: 'Security Services',
+    GstNumber: '27AAAAA0000A1Z5',
+    Phone: '+91 22 2890 1122',
+    Email: 'billing@apexguards.com',
+    ContactPerson: 'Vikram Rane (Manager)',
+    BankAccountNumber: '921020038491029',
+    BankIfsc: 'HDFC0000123',
+    BankName: 'HDFC Bank, Navi Mumbai',
+    ContractDocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    Status: 'Active',
+    Rating: 4.8,
+    Notes: 'Provides 4 round-the-clock security guards for main gate and parking.'
+  },
+  {
+    id: 'VEND-2',
+    SocietyId: 'greenwood',
+    Name: 'Schindler Elevator India Pvt Ltd',
+    VendorName: 'Schindler Elevator India Pvt Ltd',
+    ServiceCategory: 'Lift Maintenance',
+    GstNumber: '27AAACS1234F1Z8',
+    Phone: '+91 22 6100 8800',
+    Email: 'service.mumbai@schindler.com',
+    ContactPerson: 'Sanjay Deshmukh (Lead Tech)',
+    BankAccountNumber: '001205001923',
+    BankIfsc: 'ICIC0000012',
+    BankName: 'ICICI Bank, Fort',
+    ContractDocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    Status: 'Active',
+    Rating: 4.9,
+    Notes: 'Comprehensive AMC contract covering all lift parts & emergency breakdown response within 1 hour.'
+  },
+  {
+    id: 'VEND-3',
+    SocietyId: 'greenwood',
+    Name: 'AquaClean Professional Tank Hygiene',
+    VendorName: 'AquaClean Professional Tank Hygiene',
+    ServiceCategory: 'Water Tank Cleaning',
+    GstNumber: '27BCCDE5678K1Z2',
+    Phone: '+91 98200 99887',
+    Email: 'info@aquaclean.co.in',
+    ContactPerson: 'Rajesh Solanki',
+    BankAccountNumber: '30948201948',
+    BankIfsc: 'SBIN0001200',
+    BankName: 'State Bank of India',
+    ContractDocumentUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    Status: 'Active',
+    Rating: 4.5,
+    Notes: 'Quarterly UV disinfection & mechanical scrubbing of overhead & underground tanks.'
+  }
 ];
 
 

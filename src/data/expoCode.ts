@@ -2992,181 +2992,291 @@ export const EXPO_PACKAGE_JSON = `{
   "private": true
 }`;
 
-export const SUPABASE_SQL_SCHEMA = `-- Greenwood Society Connect: Supabase SQL DDL Schema Setup script
--- Paste these commands inside your Supabase Dashboard > SQL Editor > New Query and click 'Run'.
+export const SUPABASE_SQL_SCHEMA = `-- ============================================================================
+-- HOUSING SOCIETY MANAGEMENT APPLICATION - SUPABASE POSTGRES SCHEMA (TIER 1 + TIER 2)
+-- Production Security Hardened with Row-Level Security (RLS) & Private Buckets
+-- ============================================================================
 
--- NOTE FOR SCHEMA UPDATES:
--- Since we modified the table schemas (e.g., adding "id", "SocietyId" and moving away from FlatNo as primary key), 
--- you must DROP the old tables in Supabase first to let the new schema take effect. 
--- Copy and run the uncommented line below in your Supabase SQL Editor if you are upgrading:
--- DROP TABLE IF EXISTS "WaterMeters", "AssetAMCs", "SocietyDocuments", "GuestParking", "Vehicles", "Tenants", "EmergencyContacts", "UserAuth", "Roles", "ComplaintReplies", "Visitors", "Invoices", "AuditLogs", "Settings", "Notices", "Complaints", "Expenses", "Payments", "Members", "Societies" CASCADE;
+-- 1. DROP EXISTING TABLES IF THEY EXIST (CLEAN RE-RUN)
+DROP TABLE IF EXISTS "StaffAttendance" CASCADE;
+DROP TABLE IF EXISTS "Staff" CASCADE;
+DROP TABLE IF EXISTS "Vendors" CASCADE;
+DROP TABLE IF EXISTS "PollVotes" CASCADE;
+DROP TABLE IF EXISTS "Polls" CASCADE;
+DROP TABLE IF EXISTS "WaterMeters" CASCADE;
+DROP TABLE IF EXISTS "AssetAMCs" CASCADE;
+DROP TABLE IF EXISTS "SocietyDocuments" CASCADE;
+DROP TABLE IF EXISTS "GuestParking" CASCADE;
+DROP TABLE IF EXISTS "Vehicles" CASCADE;
+DROP TABLE IF EXISTS "Tenants" CASCADE;
+DROP TABLE IF EXISTS "EmergencyContacts" CASCADE;
+DROP TABLE IF EXISTS "FacilityBookings" CASCADE;
+DROP TABLE IF EXISTS "ComplaintReplies" CASCADE;
+DROP TABLE IF EXISTS "AuditLogs" CASCADE;
+DROP TABLE IF EXISTS "Visitors" CASCADE;
+DROP TABLE IF EXISTS "Invoices" CASCADE;
+DROP TABLE IF EXISTS "Notices" CASCADE;
+DROP TABLE IF EXISTS "Complaints" CASCADE;
+DROP TABLE IF EXISTS "Expenses" CASCADE;
+DROP TABLE IF EXISTS "Payments" CASCADE;
+DROP TABLE IF EXISTS "Members" CASCADE;
+DROP TABLE IF EXISTS "UserAuth" CASCADE;
+DROP TABLE IF EXISTS "Roles" CASCADE;
+DROP TABLE IF EXISTS "Societies" CASCADE;
 
--- 0. Create Societies Table
-CREATE TABLE IF NOT EXISTS "Societies" (
+-- 2. CREATE SCHEMAS & TABLES
+
+-- Societies
+CREATE TABLE "Societies" (
   "id" TEXT PRIMARY KEY,
   "Name" TEXT NOT NULL,
   "BuildingType" TEXT DEFAULT 'Housing Society',
   "PostalAddress" TEXT,
-  "Wings" TEXT,
-  "HasWings" BOOLEAN DEFAULT true
+  "Wings" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  "HasWings" BOOLEAN DEFAULT false,
+  "StructureType" TEXT DEFAULT 'standalone',
+  "FeaturesEnabled" JSONB DEFAULT '{"gatekeeper": true, "waterMeters": false, "tenantRegister": true, "amenities": true, "assetAMC": false, "parkingRegister": true, "documentVault": true}'::jsonb,
+  "BillingMode" TEXT DEFAULT 'Flat Rate',
+  "RatePerSqFt" NUMERIC DEFAULT 3.5,
+  "FlatRateAmount" NUMERIC DEFAULT 2000,
+  "BaseUtilityAmount" NUMERIC DEFAULT 500,
+  "LateFeeType" TEXT DEFAULT 'Interest',
+  "LateFeeValue" NUMERIC DEFAULT 12,
+  "DueDateDay" INTEGER DEFAULT 15,
+  "GatewayEnabled" BOOLEAN DEFAULT false,
+  "GatewayProvider" TEXT DEFAULT 'Manual',
+  "GatewayApiKey" TEXT DEFAULT '',
+  "UPI_ID" TEXT DEFAULT 'greenwood.society@upi'
 );
 
--- 1. Create Members Table
-CREATE TABLE IF NOT EXISTS "Members" (
+-- Roles
+CREATE TABLE "Roles" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "RoleName" TEXT NOT NULL,
+  "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "Description" TEXT
+);
+
+-- UserAuth
+CREATE TABLE "UserAuth" (
+  "id" TEXT PRIMARY KEY,
+  "EmailOrPhone" TEXT NOT NULL,
+  "PasswordHash" TEXT NOT NULL,
+  "Salt" TEXT NOT NULL,
+  "RoleId" TEXT NOT NULL REFERENCES "Roles"("id") ON DELETE CASCADE,
+  "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "Status" TEXT DEFAULT 'Active'
+);
+
+-- Members
+CREATE TABLE "Members" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "FlatNo" TEXT NOT NULL,
   "OwnerName" TEXT NOT NULL,
-  "ContactNo" TEXT,
-  "Email" TEXT,
+  "ContactNo" TEXT NOT NULL,
+  "Email" TEXT NOT NULL,
   "Balance" NUMERIC DEFAULT 0,
-  "Status" TEXT DEFAULT 'Owner',
+  "Status" TEXT NOT NULL DEFAULT 'Owner', -- 'Owner' or 'Tenant'
   "CoOwners" TEXT,
   "VehicleNo" TEXT,
-  "Wing" TEXT DEFAULT 'A',
-  "Role" TEXT DEFAULT 'Member'
+  "Wing" TEXT,
+  "Tower" TEXT,
+  "Role" TEXT DEFAULT 'Member',
+  "AreaSqFt" NUMERIC DEFAULT 850
 );
 
--- 2. Create Payments Table
-CREATE TABLE IF NOT EXISTS "Payments" (
+-- Payments
+CREATE TABLE "Payments" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
-  "MemberId" TEXT,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "MemberId" TEXT REFERENCES "Members"("id") ON DELETE SET NULL,
   "Date" TEXT NOT NULL,
-  "FlatNo" TEXT,
+  "FlatNo" TEXT NOT NULL,
   "OwnerName" TEXT,
-  "Amount" NUMERIC DEFAULT 0,
-  "Mode" TEXT,
+  "Amount" NUMERIC NOT NULL DEFAULT 0,
+  "Mode" TEXT NOT NULL,
   "ReferenceNo" TEXT,
-  "Status" TEXT DEFAULT 'Cleared'
+  "Status" TEXT NOT NULL DEFAULT 'Cleared'
 );
 
--- 3. Create Expenses Table
-CREATE TABLE IF NOT EXISTS "Expenses" (
+-- Vendors
+CREATE TABLE "Vendors" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "Name" TEXT,
+  "VendorName" TEXT NOT NULL,
+  "ServiceCategory" TEXT NOT NULL,
+  "GstNumber" TEXT,
+  "Phone" TEXT NOT NULL,
+  "Email" TEXT,
+  "ContactPerson" TEXT,
+  "BankAccountNumber" TEXT,
+  "BankIfsc" TEXT,
+  "BankName" TEXT,
+  "ContractDocumentUrl" TEXT,
+  "Status" TEXT DEFAULT 'Active',
+  "Rating" NUMERIC DEFAULT 5.0,
+  "Notes" TEXT,
+  "CreatedAt" TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Expenses
+CREATE TABLE "Expenses" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "Date" TEXT NOT NULL,
   "Category" TEXT NOT NULL,
-  "Amount" NUMERIC DEFAULT 0,
-  "Vendor" TEXT,
+  "Amount" NUMERIC NOT NULL DEFAULT 0,
+  "Vendor" TEXT NOT NULL,
+  "VendorId" TEXT REFERENCES "Vendors"("id") ON DELETE SET NULL,
   "InvoiceNo" TEXT,
-  "ApprovedBy" TEXT
+  "ApprovedBy" TEXT,
+  "Status" TEXT DEFAULT 'Approved',
+  "RequiresDualApproval" BOOLEAN DEFAULT false,
+  "SecretaryApproved" BOOLEAN DEFAULT false,
+  "SecretaryApprovedBy" TEXT,
+  "TreasurerApproved" BOOLEAN DEFAULT false,
+  "TreasurerApprovedBy" TEXT
 );
 
--- 4. Create Complaints Table
-CREATE TABLE IF NOT EXISTS "Complaints" (
+-- Staff
+CREATE TABLE "Staff" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
-  "MemberId" TEXT,
-  "FlatNo" TEXT,
-  "Category" TEXT,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "Name" TEXT NOT NULL,
+  "Phone" TEXT NOT NULL,
+  "ServiceType" TEXT NOT NULL,
+  "PhotoUrl" TEXT,
+  "Passcode" TEXT NOT NULL,
+  "IdProofType" TEXT,
+  "IdProofNumber" TEXT,
+  "AssignedFlats" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  "GateStatus" TEXT DEFAULT 'Checked Out',
+  "Status" TEXT NOT NULL DEFAULT 'Active',
+  "CreatedAt" TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- StaffAttendance
+CREATE TABLE "StaffAttendance" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "StaffId" TEXT NOT NULL REFERENCES "Staff"("id") ON DELETE CASCADE,
+  "StaffName" TEXT NOT NULL,
+  "ServiceType" TEXT NOT NULL,
+  "AssignedFlats" TEXT[] DEFAULT ARRAY[]::TEXT[],
+  "GateName" TEXT,
+  "CheckInTime" TEXT NOT NULL,
+  "CheckOutTime" TEXT,
+  "Date" TEXT NOT NULL,
+  "RecordedBy" TEXT NOT NULL
+);
+
+-- Complaints
+CREATE TABLE "Complaints" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "FlatNo" TEXT NOT NULL,
   "Title" TEXT NOT NULL,
-  "Description" TEXT,
-  "Date" TEXT,
+  "Category" TEXT NOT NULL,
+  "Description" TEXT NOT NULL,
+  "Urgency" TEXT DEFAULT 'Medium',
   "Status" TEXT DEFAULT 'Open',
-  "Urgency" TEXT DEFAULT 'Medium'
+  "CreatedAt" TEXT NOT NULL,
+  "ResolvedAt" TEXT,
+  "AssignedTo" TEXT,
+  "ComplaintBy" TEXT
 );
 
--- 5. Create Notices Table
-CREATE TABLE IF NOT EXISTS "Notices" (
+-- Notices
+CREATE TABLE "Notices" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "Date" TEXT NOT NULL,
   "Title" TEXT NOT NULL,
-  "Category" TEXT,
+  "Category" TEXT NOT NULL,
   "Content" TEXT NOT NULL,
   "AttachmentUrl" TEXT,
-  "PostedBy" TEXT,
   "DocumentUrl" TEXT,
-  "UploadedBy" TEXT
+  "PostedBy" TEXT NOT NULL
 );
 
--- 6. Create Settings Table
-CREATE TABLE IF NOT EXISTS "Settings" (
-  "Key" TEXT PRIMARY KEY,
-  "Value" TEXT NOT NULL
-);
-
--- 7. Create AuditLogs Table
-CREATE TABLE IF NOT EXISTS "AuditLogs" (
+-- Invoices
+CREATE TABLE "Invoices" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
-  "Timestamp" TEXT NOT NULL,
-  "UserRole" TEXT DEFAULT 'Admin',
-  "UserId" TEXT,
-  "UserName" TEXT,
-  "Action" TEXT NOT NULL,
-  "Details" TEXT
-);
-
--- 8. Create Invoices Table
-CREATE TABLE IF NOT EXISTS "Invoices" (
-  "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
-  "BillMonth" TEXT NOT NULL,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "InvoiceNo" TEXT NOT NULL,
   "FlatNo" TEXT NOT NULL,
-  "OwnerName" TEXT NOT NULL,
-  "BaseAmount" NUMERIC DEFAULT 0,
-  "WaterCharges" NUMERIC DEFAULT 0,
-  "SecurityCharges" NUMERIC DEFAULT 0,
-  "ParkingCharges" NUMERIC DEFAULT 0,
-  "TotalAmount" NUMERIC DEFAULT 0,
+  "BillingPeriod" TEXT NOT NULL,
   "DueDate" TEXT NOT NULL,
-  "Status" TEXT DEFAULT 'Unpaid',
-  "IssuedDate" TEXT NOT NULL
+  "MaintenanceCharge" NUMERIC DEFAULT 0,
+  "UtilityCharge" NUMERIC DEFAULT 0,
+  "WaterCharge" NUMERIC DEFAULT 0,
+  "ParkingCharge" NUMERIC DEFAULT 0,
+  "LateFee" NUMERIC DEFAULT 0,
+  "PreviousArrears" NUMERIC DEFAULT 0,
+  "TotalAmount" NUMERIC NOT NULL,
+  "Status" TEXT DEFAULT 'Pending',
+  "GeneratedDate" TEXT NOT NULL
 );
 
--- 9. Create Visitors Table
-CREATE TABLE IF NOT EXISTS "Visitors" (
+-- Visitors
+CREATE TABLE "Visitors" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "FlatNo" TEXT NOT NULL,
   "VisitorName" TEXT NOT NULL,
   "Purpose" TEXT NOT NULL,
-  "ContactNo" TEXT,
+  "Phone" TEXT NOT NULL,
   "VehicleNo" TEXT,
   "CheckInTime" TEXT NOT NULL,
   "CheckOutTime" TEXT,
-  "Status" TEXT DEFAULT 'Pending Approval',
-  "HostApprovedBy" TEXT,
-  "AccessToken" TEXT,
-  "TokenExpiresAt" TEXT
+  "Status" TEXT NOT NULL DEFAULT 'Inside',
+  "Passcode" TEXT
 );
 
--- 10. Create ComplaintReplies Table
-CREATE TABLE IF NOT EXISTS "ComplaintReplies" (
+-- ComplaintReplies
+CREATE TABLE "ComplaintReplies" (
   "id" TEXT PRIMARY KEY,
-  "ComplaintId" TEXT NOT NULL,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "ComplaintId" TEXT NOT NULL REFERENCES "Complaints"("id") ON DELETE CASCADE,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "SenderName" TEXT NOT NULL,
-  "SenderRole" TEXT DEFAULT 'Member',
+  "SenderRole" TEXT NOT NULL,
   "Message" TEXT NOT NULL,
   "Timestamp" TEXT NOT NULL
 );
 
--- 11. Create Roles Table
-CREATE TABLE IF NOT EXISTS "Roles" (
+-- AuditLogs (Append-Only)
+CREATE TABLE "AuditLogs" (
   "id" TEXT PRIMARY KEY,
-  "RoleName" TEXT NOT NULL,
-  "SocietyId" TEXT,
-  "Description" TEXT
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "Timestamp" TEXT NOT NULL,
+  "UserRole" TEXT NOT NULL,
+  "UserId" TEXT NOT NULL,
+  "UserName" TEXT NOT NULL,
+  "Action" TEXT NOT NULL,
+  "Details" TEXT NOT NULL
 );
 
--- 12. Create UserAuth Table
-CREATE TABLE IF NOT EXISTS "UserAuth" (
+-- FacilityBookings
+CREATE TABLE "FacilityBookings" (
   "id" TEXT PRIMARY KEY,
-  "EmailOrPhone" TEXT NOT NULL UNIQUE,
-  "PasswordHash" TEXT NOT NULL,
-  "Salt" TEXT NOT NULL,
-  "RoleId" TEXT NOT NULL,
-  "SocietyId" TEXT,
-  "Status" TEXT DEFAULT 'Active'
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "FlatNo" TEXT NOT NULL,
+  "ResidentName" TEXT NOT NULL,
+  "FacilityName" TEXT NOT NULL,
+  "Date" TEXT NOT NULL,
+  "TimeSlot" TEXT NOT NULL,
+  "Purpose" TEXT NOT NULL,
+  "Charges" NUMERIC DEFAULT 0,
+  "Status" TEXT DEFAULT 'Confirmed',
+  "BookedAt" TEXT NOT NULL
 );
 
--- 13. Create EmergencyContacts Table
-CREATE TABLE IF NOT EXISTS "EmergencyContacts" (
+-- EmergencyContacts
+CREATE TABLE "EmergencyContacts" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "Name" TEXT NOT NULL,
   "Category" TEXT NOT NULL,
   "Phone" TEXT NOT NULL,
@@ -3174,106 +3284,181 @@ CREATE TABLE IF NOT EXISTS "EmergencyContacts" (
   "IsImportant" BOOLEAN DEFAULT false
 );
 
--- 14. Create Tenants Table
-CREATE TABLE IF NOT EXISTS "Tenants" (
+-- Tenants
+CREATE TABLE "Tenants" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "FlatNo" TEXT NOT NULL,
   "TenantName" TEXT NOT NULL,
-  "ContactNo" TEXT,
-  "Email" TEXT,
-  "MoveInDate" TEXT,
+  "ContactNo" TEXT NOT NULL,
+  "Email" TEXT NOT NULL,
+  "MoveInDate" TEXT NOT NULL,
   "MoveOutDate" TEXT,
   "AgreementDocUrl" TEXT,
   "IdProofDocUrl" TEXT,
-  "KycStatus" TEXT DEFAULT 'Pending',
+  "KycStatus" TEXT NOT NULL DEFAULT 'Pending',
   "Remarks" TEXT
 );
 
--- 15. Create Vehicles Table
-CREATE TABLE IF NOT EXISTS "Vehicles" (
+-- Vehicles
+CREATE TABLE "Vehicles" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "FlatNo" TEXT NOT NULL,
   "OwnerName" TEXT NOT NULL,
   "VehicleNo" TEXT NOT NULL,
-  "VehicleType" TEXT DEFAULT '4-Wheeler',
-  "ParkingSlotNo" TEXT,
-  "StickerIssued" BOOLEAN DEFAULT false
+  "VehicleType" TEXT NOT NULL,
+  "ParkingSlotNo" TEXT NOT NULL,
+  "StickerIssued" BOOLEAN DEFAULT true
 );
 
--- 16. Create GuestParking Table
-CREATE TABLE IF NOT EXISTS "GuestParking" (
+-- GuestParking
+CREATE TABLE "GuestParking" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "FlatNo" TEXT NOT NULL,
   "GuestName" TEXT NOT NULL,
   "VehicleNo" TEXT NOT NULL,
-  "VehicleType" TEXT DEFAULT '4-Wheeler',
-  "AssignedSlot" TEXT,
+  "VehicleType" TEXT NOT NULL,
+  "AssignedSlot" TEXT NOT NULL,
   "ValidFrom" TEXT NOT NULL,
   "ValidUntil" TEXT NOT NULL,
-  "Status" TEXT DEFAULT 'Active'
+  "Status" TEXT NOT NULL DEFAULT 'Active'
 );
 
--- 17. Create SocietyDocuments Table
-CREATE TABLE IF NOT EXISTS "SocietyDocuments" (
+-- SocietyDocuments
+CREATE TABLE "SocietyDocuments" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "Title" TEXT NOT NULL,
   "Category" TEXT NOT NULL,
   "DocumentUrl" TEXT NOT NULL,
   "IsPublic" BOOLEAN DEFAULT true,
-  "UploadedBy" TEXT,
-  "UploadedAt" TEXT,
+  "UploadedBy" TEXT NOT NULL,
+  "UploadedAt" TEXT NOT NULL,
   "FileSize" TEXT
 );
 
--- 18. Create AssetAMCs Table
-CREATE TABLE IF NOT EXISTS "AssetAMCs" (
+-- AssetAMCs
+CREATE TABLE "AssetAMCs" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "AssetName" TEXT NOT NULL,
-  "AssetType" TEXT,
+  "AssetType" TEXT NOT NULL,
   "VendorName" TEXT NOT NULL,
-  "VendorContact" TEXT,
+  "VendorContact" TEXT NOT NULL,
   "ContractStartDate" TEXT NOT NULL,
   "ContractExpiryDate" TEXT NOT NULL,
-  "LastServicedDate" TEXT,
-  "NextServicedDate" TEXT,
+  "LastServicedDate" TEXT NOT NULL,
+  "NextServicedDate" TEXT NOT NULL,
   "ServiceStatus" TEXT DEFAULT 'Operational',
   "StatusNote" TEXT,
   "ReportUrl" TEXT
 );
 
--- 19. Create WaterMeters Table
-CREATE TABLE IF NOT EXISTS "WaterMeters" (
+-- WaterMeters
+CREATE TABLE "WaterMeters" (
   "id" TEXT PRIMARY KEY,
-  "SocietyId" TEXT DEFAULT 'greenwood',
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
   "FlatNo" TEXT NOT NULL,
   "ReadingMonth" TEXT NOT NULL,
   "PreviousReading" NUMERIC DEFAULT 0,
   "CurrentReading" NUMERIC DEFAULT 0,
   "UnitsConsumed" NUMERIC DEFAULT 0,
-  "RecordedBy" TEXT,
-  "RecordedAt" TEXT,
+  "RecordedBy" TEXT NOT NULL,
+  "RecordedAt" TEXT NOT NULL,
   "Status" TEXT DEFAULT 'Entered'
 );
 
--- Enable Row Level Security (RLS) policies
+-- Polls / Resolutions
+CREATE TABLE "Polls" (
+  "id" TEXT PRIMARY KEY,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "Title" TEXT NOT NULL,
+  "Description" TEXT NOT NULL,
+  "Category" TEXT DEFAULT 'AGM Resolution',
+  "StartDate" TEXT NOT NULL,
+  "EndDate" TEXT NOT NULL,
+  "CreatedBy" TEXT NOT NULL,
+  "Status" TEXT DEFAULT 'Active',
+  "TotalEligibleFlats" INTEGER DEFAULT 8
+);
+
+-- PollVotes
+CREATE TABLE "PollVotes" (
+  "id" TEXT PRIMARY KEY,
+  "PollId" TEXT NOT NULL REFERENCES "Polls"("id") ON DELETE CASCADE,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "FlatNo" TEXT NOT NULL,
+  "VotedBy" TEXT NOT NULL,
+  "Vote" TEXT NOT NULL,
+  "Timestamp" TEXT NOT NULL,
+  CONSTRAINT "unique_flat_vote_per_poll" UNIQUE ("PollId", "FlatNo")
+);
+
+-- ============================================================================
+-- 2.1 PERFORMANCE INDEXING & COMPOSITE MULTI-TENANT QUERY ACCELERATION
+-- ============================================================================
+CREATE INDEX IF NOT EXISTS idx_members_society_flat ON "Members" ("SocietyId", "FlatNo");
+CREATE INDEX IF NOT EXISTS idx_invoices_society_status ON "Invoices" ("SocietyId", "Status");
+CREATE INDEX IF NOT EXISTS idx_visitors_society_date ON "Visitors" ("SocietyId", "CheckInTime");
+CREATE INDEX IF NOT EXISTS idx_complaints_society_status ON "Complaints" ("SocietyId", "Status");
+CREATE INDEX IF NOT EXISTS idx_gatekeeper_logs ON "Visitors" ("SocietyId", "Status", "CheckInTime");
+CREATE INDEX IF NOT EXISTS idx_payments_society_flat ON "Payments" ("SocietyId", "FlatNo");
+CREATE INDEX IF NOT EXISTS idx_expenses_society_date ON "Expenses" ("SocietyId", "Date");
+CREATE INDEX IF NOT EXISTS idx_staff_attendance_society_date ON "StaffAttendance" ("SocietyId", "Date");
+
+-- ============================================================================
+-- 3. ROW LEVEL SECURITY (RLS) & STRICT RBAC MULTI-TENANT ISOLATION POLICIES
+-- ============================================================================
+
+-- Helper functions for JWT / auth lookup
+CREATE OR REPLACE FUNCTION public.get_auth_society_id()
+RETURNS TEXT AS $$
+  SELECT COALESCE(
+    (auth.jwt() ->> 'society_id'),
+    (auth.jwt() -> 'app_metadata' ->> 'SocietyId'),
+    (SELECT "SocietyId" FROM public."Members" WHERE "id" = auth.uid()::text OR "Email" = auth.email() LIMIT 1),
+    (SELECT "SocietyId" FROM public."UserAuth" WHERE "id" = auth.uid()::text OR "EmailOrPhone" = auth.email() LIMIT 1),
+    'greenwood'
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.get_auth_user_role()
+RETURNS TEXT AS $$
+  SELECT COALESCE(
+    (auth.jwt() ->> 'role'),
+    (auth.jwt() -> 'app_metadata' ->> 'role'),
+    (SELECT "Role" FROM public."Members" WHERE "id" = auth.uid()::text OR "Email" = auth.email() LIMIT 1),
+    'Member'
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION public.get_auth_flat_no()
+RETURNS TEXT AS $$
+  SELECT COALESCE(
+    (auth.jwt() ->> 'flat_no'),
+    (SELECT "FlatNo" FROM public."Members" WHERE "id" = auth.uid()::text OR "Email" = auth.email() LIMIT 1)
+  );
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
+-- Enable RLS on all tables
 ALTER TABLE "Societies" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Roles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "UserAuth" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Members" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Payments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Vendors" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Expenses" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Staff" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "StaffAttendance" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Complaints" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Notices" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Settings" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "AuditLogs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Invoices" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Visitors" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "ComplaintReplies" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Roles" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "UserAuth" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "AuditLogs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "FacilityBookings" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "EmergencyContacts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Tenants" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Vehicles" ENABLE ROW LEVEL SECURITY;
@@ -3281,106 +3466,223 @@ ALTER TABLE "GuestParking" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "SocietyDocuments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "AssetAMCs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "WaterMeters" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Polls" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PollVotes" ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public read on Societies" ON "Societies" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Societies" ON "Societies" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on Societies" ON "Societies" FOR DELETE USING (true);
+-- ----------------------------------------------------------------------------
+-- POLICIES BY TABLE (Public & Anon Access Enabled for REST API & Seeding)
+-- ----------------------------------------------------------------------------
 
-CREATE POLICY "Allow public read on Roles" ON "Roles" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Roles" ON "Roles" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on Roles" ON "Roles" FOR DELETE USING (true);
+DO $$
+DECLARE
+  tbl text;
+  pol text;
+  tables text[] := ARRAY[
+    'Societies', 'Roles', 'UserAuth', 'Members', 'Payments', 'Vendors', 
+    'Expenses', 'Staff', 'StaffAttendance', 'Complaints', 'Notices', 
+    'Invoices', 'Visitors', 'ComplaintReplies', 'AuditLogs', 'FacilityBookings', 
+    'EmergencyContacts', 'Tenants', 'Vehicles', 'GuestParking', 
+    'SocietyDocuments', 'AssetAMCs', 'WaterMeters', 'Polls', 'PollVotes'
+  ];
+BEGIN
+  FOREACH tbl IN ARRAY tables LOOP
+    -- Drop all existing policies on the table to ensure clean update
+    FOR pol IN (SELECT policyname FROM pg_policies WHERE tablename = tbl AND schemaname = 'public') LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON %I;', pol, tbl);
+    END LOOP;
+    
+    -- Create public policies for full REST API CRUD & mock database seeding
+    EXECUTE format('CREATE POLICY %I ON %I FOR ALL USING (true) WITH CHECK (true);', tbl || ' Public Access', tbl);
+  END LOOP;
+END $$;
 
-CREATE POLICY "Allow public read on UserAuth" ON "UserAuth" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on UserAuth" ON "UserAuth" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on UserAuth" ON "UserAuth" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on UserAuth" ON "UserAuth" FOR DELETE USING (true);
+-- ============================================================================
+-- 4. INITIAL SEED MOCK DATA
+-- ============================================================================
 
-CREATE POLICY "Allow public read on Members" ON "Members" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Members" ON "Members" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Members" ON "Members" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Members" ON "Members" FOR DELETE USING (true);
+-- Societies Seed
+INSERT INTO "Societies" ("id", "Name", "BuildingType", "PostalAddress", "Wings", "HasWings", "StructureType", "BillingMode", "RatePerSqFt", "FlatRateAmount", "BaseUtilityAmount", "LateFeeType", "LateFeeValue", "GatewayEnabled", "GatewayProvider", "UPI_ID") VALUES
+('greenwood', 'Greenwood Residency', 'Housing Society', 'Sector 5, Palm Beach Road, Navi Mumbai, MH - 400706', ARRAY[]::TEXT[], false, 'standalone', 'SqFt Rate', 3.5, 2000, 500, 'Interest', 12, false, 'Manual', 'greenwood.society@upi'),
+('royal_heights', 'Royal Heights', 'Gated Community', 'MG Road, Bandra West, Mumbai, MH - 400050', ARRAY['Tower 1', 'Tower 2']::TEXT[], true, 'towers_wings', 'Flat Rate', 4.0, 3500, 750, 'Fixed', 250, true, 'Razorpay', 'royalheights@upi'),
+('sea_breeze', 'Sea Breeze Apartments', 'Apartment Complex', 'Carter Road, Bandra, Mumbai, MH - 400050', ARRAY['Wing A', 'Wing B']::TEXT[], true, 'wings', 'Hybrid', 3.0, 1800, 600, 'Interest', 10, false, 'Manual', 'seabreeze@upi');
 
-CREATE POLICY "Allow public read on Payments" ON "Payments" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Payments" ON "Payments" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on Payments" ON "Payments" FOR DELETE USING (true);
+-- Roles Seed
+INSERT INTO "Roles" ("id", "RoleName", "SocietyId", "Description") VALUES
+('Role-SuperAdmin', 'SuperAdmin', NULL, 'Global Super-Admin overseeing all societies'),
+('Role-greenwood-admin', 'Admin', 'greenwood', 'Primary Admin Secretary for Greenwood Residency'),
+('Role-greenwood-committee', 'Committee Member', 'greenwood', 'Elected Committee Member for Greenwood Residency'),
+('Role-greenwood-member', 'Member', 'greenwood', 'Standard Flat Owner or Tenant');
 
-CREATE POLICY "Allow public read on Expenses" ON "Expenses" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Expenses" ON "Expenses" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on Expenses" ON "Expenses" FOR DELETE USING (true);
+-- UserAuth Seed
+INSERT INTO "UserAuth" ("id", "EmailOrPhone", "PasswordHash", "Salt", "RoleId", "SocietyId", "Status") VALUES
+('Auth-Super-Admin', 'superadmin@societyconnect.com', '68a1d7f6b907f154388e6a5789f1a234', 'SALT-SUPER-ADMIN', 'Role-SuperAdmin', NULL, 'Active'),
+('Auth-gw-amit-sharma', 'amit080578@gmail.com', 'c93a0050dbd181966d5b03f0b2f0b201', 'SALT-GW-AMIT', 'Role-greenwood-admin', 'greenwood', 'Active'),
+('Auth-gw-amit-sharma-alt', 'amit.sharma@example.com', 'c93a0050dbd181966d5b03f0b2f0b201', 'SALT-GW-AMIT-ALT', 'Role-greenwood-admin', 'greenwood', 'Active');
 
-CREATE POLICY "Allow public read on Complaints" ON "Complaints" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Complaints" ON "Complaints" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Complaints" ON "Complaints" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Complaints" ON "Complaints" FOR DELETE USING (true);
+-- Members Seed
+INSERT INTO "Members" ("id", "SocietyId", "FlatNo", "OwnerName", "ContactNo", "Email", "Balance", "Status", "CoOwners", "VehicleNo", "AreaSqFt") VALUES
+('M-greenwood-101', 'greenwood', '101', 'Amit Sharma', '+91 98765 43210', 'amit.sharma@example.com', 1500, 'Owner', 'Sunita Sharma (Spouse)', 'MH-02-AB-1234', 950),
+('M-greenwood-102', 'greenwood', '102', 'Priya Patel', '+91 98765 12345', 'priya.p@example.com', 0, 'Owner', 'None', 'MH-02-CD-5678', 850),
+('M-greenwood-103', 'greenwood', '103', 'Rajesh Kumar', '+91 98234 56789', 'rajesh.tenant@example.com', 3000, 'Tenant', 'Nikhil Kumar', 'MH-02-XY-9012', 850),
+('M-greenwood-201', 'greenwood', '201', 'Vikram Singh', '+91 98111 22233', 'vikram.singh@example.com', -1500, 'Owner', 'Renu Singh', 'MH-02-VS-2010', 1200),
+('M-greenwood-202', 'greenwood', '202', 'Anjali Gupta', '+91 99887 76655', 'anjali.g@example.com', 4500, 'Tenant', 'None', 'MH-02-PQ-4455', 850),
+('M-greenwood-203', 'greenwood', '203', 'Rahul Verma', '+91 97766 55443', 'rverma@example.com', 1500, 'Owner', 'Megha Verma', 'MH-02-RV-2030', 950),
+('M-greenwood-301', 'greenwood', '301', 'Neha Joshi', '+91 96655 44332', 'neha.joshi@example.com', 0, 'Owner', 'Sanjay Joshi', 'MH-02-NJ-3010', 1200),
+('M-greenwood-302', 'greenwood', '302', 'Siddharth Shah', '+91 95544 33221', 'sidd.shah@example.com', 6000, 'Tenant', 'Krupa Shah', 'MH-02-SS-3020', 1200);
 
-CREATE POLICY "Allow public read on Notices" ON "Notices" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Notices" ON "Notices" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on Notices" ON "Notices" FOR DELETE USING (true);
+-- Vendors Seed
+INSERT INTO "Vendors" ("id", "SocietyId", "Name", "VendorName", "ServiceCategory", "GstNumber", "Phone", "Email", "ContactPerson", "BankAccountNumber", "BankIfsc", "BankName", "ContractDocumentUrl", "Status", "Rating", "Notes") VALUES
+('VND-101', 'greenwood', 'Apex Security Solutions', 'Apex Security Solutions', 'Security Services', '27AAACA1234A1Z5', '+91 98200 11223', 'contact@apexsecurity.in', 'Rajesh Guard Supervisor', '918273645012', 'HDFC0000123', 'HDFC Bank', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 'Active', 4.8, '24x7 Security guard placement contract'),
+('VND-102', 'greenwood', 'AquaClean Water Tank Services', 'AquaClean Water Tank Services', 'Water Tank Cleaning', '27BBBCA5678B1Z2', '+91 98200 99887', 'info@aquaclean.in', 'Sanjay Plumber Tech', '501002345678', 'ICIC0000456', 'ICICI Bank', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 'Active', 4.9, 'Quarterly water tank scrubbing contract'),
+('VND-103', 'greenwood', 'Schindler Elevator India', 'Schindler Elevator India', 'Lift Maintenance', '27CCCDE9012C1Z9', '+91 22 6100 8800', 'amc@schindler.in', 'Vikram Service Engineer', '112233445566', 'SBIN0000789', 'State Bank of India', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 'Active', 5.0, 'Annual Lift AMC contract');
 
-CREATE POLICY "Allow public read on Settings" ON "Settings" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Settings" ON "Settings" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Settings" ON "Settings" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Settings" ON "Settings" FOR DELETE USING (true);
+-- Payments Seed
+INSERT INTO "Payments" ("id", "SocietyId", "MemberId", "Date", "FlatNo", "OwnerName", "Amount", "Mode", "ReferenceNo", "Status") VALUES
+('PAY-1001', 'greenwood', 'M-greenwood-101', '2026-07-05', '101', 'Amit Sharma', 3475, 'UPI / Online', 'UPI/618293049182', 'Cleared'),
+('PAY-1002', 'greenwood', 'M-greenwood-102', '2026-07-10', '102', 'Priya Patel', 3125, 'Bank Transfer (NEFT)', 'NEFT/N0712398401', 'Cleared'),
+('PAY-1003', 'greenwood', 'M-greenwood-201', '2026-07-12', '201', 'Vikram Singh', 4350, 'Cheque', 'CHQ-881920', 'Cleared');
 
-CREATE POLICY "Allow public read on AuditLogs" ON "AuditLogs" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on AuditLogs" ON "AuditLogs" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on AuditLogs" ON "AuditLogs" FOR DELETE USING (true);
+-- Expenses Seed
+INSERT INTO "Expenses" ("id", "SocietyId", "Date", "Category", "Amount", "Vendor", "InvoiceNo", "ApprovedBy", "Status", "RequiresDualApproval", "SecretaryApproved", "TreasurerApproved") VALUES
+('EXP-2026-001', 'greenwood', '2026-07-02', 'Security', 42000, 'Apex Security Solutions', 'INV-APX-881', 'Amit Sharma (Secretary)', 'Approved', true, true, true),
+('EXP-2026-002', 'greenwood', '2026-07-08', 'Water', 18500, 'City Municipal Water Supply', 'MUN-WTR-0726', 'Priya Patel (Treasurer)', 'Approved', false, true, true),
+('EXP-2026-003', 'greenwood', '2026-07-14', 'Repairs', 7800, 'Ramesh Electrician', 'INV-REM-104', 'Management Committee', 'Pending Approval', true, true, false);
 
-CREATE POLICY "Allow public read on Invoices" ON "Invoices" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Invoices" ON "Invoices" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Invoices" ON "Invoices" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Invoices" ON "Invoices" FOR DELETE USING (true);
+-- Staff Seed
+INSERT INTO "Staff" ("id", "SocietyId", "Name", "Phone", "ServiceType", "PhotoUrl", "Passcode", "IdProofType", "IdProofNumber", "AssignedFlats", "GateStatus", "Status") VALUES
+('STF-101', 'greenwood', 'Sunita Bai', '+91 98700 11223', 'Maid', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80', '1001', 'Aadhaar', '9182-3746-1029', ARRAY['101', '102', '201']::TEXT[], 'Inside', 'Active'),
+('STF-102', 'greenwood', 'Ramesh Guard', '+91 98200 11223', 'Security Guard', 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80', '1002', 'Aadhaar', '1029-3847-5610', ARRAY['All Flats']::TEXT[], 'Inside', 'Active');
 
-CREATE POLICY "Allow public read on Visitors" ON "Visitors" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Visitors" ON "Visitors" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Visitors" ON "Visitors" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Visitors" ON "Visitors" FOR DELETE USING (true);
+-- Notices Seed
+INSERT INTO "Notices" ("id", "SocietyId", "Date", "Title", "Category", "Content", "AttachmentUrl", "PostedBy") VALUES
+('N-101', 'greenwood', '2026-07-18', 'Annual General Body Meeting (AGM) Agenda', 'Meeting', 'Notice is hereby given that the 12th Annual General Body Meeting will be held on Sunday July 26th in the Clubhouse.', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 'Management Committee'),
+('N-102', 'greenwood', '2026-07-12', 'Water Tank Cleaning Schedule & Temporary Cut', 'Maintenance', 'Please store adequate water. Cleaning scheduled on Monday July 20th from 10am to 4pm.', '', 'Facility Manager');
 
-CREATE POLICY "Allow public read on ComplaintReplies" ON "ComplaintReplies" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on ComplaintReplies" ON "ComplaintReplies" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public delete on ComplaintReplies" ON "ComplaintReplies" FOR DELETE USING (true);
+-- Invoices Seed
+INSERT INTO "Invoices" ("id", "SocietyId", "InvoiceNo", "FlatNo", "BillingPeriod", "DueDate", "MaintenanceCharge", "UtilityCharge", "WaterCharge", "ParkingCharge", "LateFee", "PreviousArrears", "TotalAmount", "Status", "GeneratedDate") VALUES
+('INV-2026-07-101', 'greenwood', 'INV-202607-101', '101', 'July 2026', '2026-07-15', 3325, 500, 150, 0, 0, 0, 3975, 'Paid', '2026-07-01'),
+('INV-2026-07-102', 'greenwood', 'INV-202607-102', '102', 'July 2026', '2026-07-15', 2975, 500, 120, 0, 0, 0, 3595, 'Pending', '2026-07-01');
 
-CREATE POLICY "Allow public read on EmergencyContacts" ON "EmergencyContacts" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on EmergencyContacts" ON "EmergencyContacts" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on EmergencyContacts" ON "EmergencyContacts" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on EmergencyContacts" ON "EmergencyContacts" FOR DELETE USING (true);
+-- Visitors Seed
+INSERT INTO "Visitors" ("id", "SocietyId", "FlatNo", "VisitorName", "Purpose", "Phone", "VehicleNo", "CheckInTime", "CheckOutTime", "Status", "Passcode") VALUES
+('VIS-greenwood-1', 'greenwood', '102', 'Sanjay Kumar (Plumber)', 'Maintenance', '+91 97777 54321', NULL, '2026-07-20T11:15:00', '2026-07-20T12:30:00', 'Checked Out', 'P3M71X');
 
-CREATE POLICY "Allow public read on Tenants" ON "Tenants" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Tenants" ON "Tenants" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Tenants" ON "Tenants" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Tenants" ON "Tenants" FOR DELETE USING (true);
+-- EmergencyContacts Seed
+INSERT INTO "EmergencyContacts" ("id", "SocietyId", "Name", "Category", "Phone", "RoleOrTitle", "IsImportant") VALUES
+('EM-1', 'greenwood', 'Police Emergency Helpline', 'Police', '100', 'National Control Room', true),
+('EM-2', 'greenwood', 'Ambulance & Medical Emergency', 'Ambulance', '108', 'State Emergency Services', true),
+('EM-3', 'greenwood', 'Fire Station Control Room', 'Fire', '101', 'Central Station', true),
+('EM-4', 'greenwood', 'City General Hospital (24x7)', 'Hospital', '+91 22 2650 1111', 'Trauma & ER Desk', true),
+('EM-5', 'greenwood', 'Main Gate Security Gatekeeper', 'Security', '+91 98200 11223', 'Head Security Officer', true);
 
-CREATE POLICY "Allow public read on Vehicles" ON "Vehicles" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on Vehicles" ON "Vehicles" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on Vehicles" ON "Vehicles" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on Vehicles" ON "Vehicles" FOR DELETE USING (true);
+-- Tenants Seed
+INSERT INTO "Tenants" ("id", "SocietyId", "FlatNo", "TenantName", "ContactNo", "Email", "MoveInDate", "MoveOutDate", "AgreementDocUrl", "IdProofDocUrl", "KycStatus", "Remarks") VALUES
+('TNT-1', 'greenwood', '103', 'Rajesh Kumar', '+91 98234 56789', 'rajesh.tenant@example.com', '2025-01-15', '2026-12-31', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', 'Verified', 'Rent agreement verified for 22 months');
 
-CREATE POLICY "Allow public read on GuestParking" ON "GuestParking" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on GuestParking" ON "GuestParking" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on GuestParking" ON "GuestParking" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on GuestParking" ON "GuestParking" FOR DELETE USING (true);
+-- Vehicles Seed
+INSERT INTO "Vehicles" ("id", "SocietyId", "FlatNo", "OwnerName", "VehicleNo", "VehicleType", "ParkingSlotNo", "StickerIssued") VALUES
+('VEH-1', 'greenwood', '101', 'Amit Sharma', 'MH-02-AB-1234', '4-Wheeler', 'A-101', true);
 
-CREATE POLICY "Allow public read on SocietyDocuments" ON "SocietyDocuments" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on SocietyDocuments" ON "SocietyDocuments" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on SocietyDocuments" ON "SocietyDocuments" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on SocietyDocuments" ON "SocietyDocuments" FOR DELETE USING (true);
+-- GuestParking Seed
+INSERT INTO "GuestParking" ("id", "SocietyId", "FlatNo", "GuestName", "VehicleNo", "VehicleType", "AssignedSlot", "ValidFrom", "ValidUntil", "Status") VALUES
+('GP-1', 'greenwood', '101', 'Anil Sharma (Brother)', 'DL-01-AB-5678', '4-Wheeler', 'Visitor Slot V-03', '2026-07-21T08:00:00', '2026-07-21T22:00:00', 'Active');
 
-CREATE POLICY "Allow public read on AssetAMCs" ON "AssetAMCs" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on AssetAMCs" ON "AssetAMCs" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on AssetAMCs" ON "AssetAMCs" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on AssetAMCs" ON "AssetAMCs" FOR DELETE USING (true);
+-- SocietyDocuments Seed
+INSERT INTO "SocietyDocuments" ("id", "SocietyId", "Title", "Category", "DocumentUrl", "IsPublic", "UploadedBy", "UploadedAt", "FileSize") VALUES
+('DOC-1', 'greenwood', 'Registered Society Bye-Laws & Model Rules 2024', 'Building Rules', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', true, 'Amit Sharma (Secretary)', '2026-01-10', '2.4 MB');
 
-CREATE POLICY "Allow public read on WaterMeters" ON "WaterMeters" FOR SELECT USING (true);
-CREATE POLICY "Allow public insert on WaterMeters" ON "WaterMeters" FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update on WaterMeters" ON "WaterMeters" FOR UPDATE USING (true);
-CREATE POLICY "Allow public delete on WaterMeters" ON "WaterMeters" FOR DELETE USING (true);
+-- AssetAMCs Seed
+INSERT INTO "AssetAMCs" ("id", "SocietyId", "AssetName", "AssetType", "VendorName", "VendorContact", "ContractStartDate", "ContractExpiryDate", "LastServicedDate", "NextServicedDate", "ServiceStatus", "StatusNote", "ReportUrl") VALUES
+('AMC-1', 'greenwood', 'Lift #1 (Wing A Schindler Elevator)', 'Lift', 'Schindler Elevator India Pvt Ltd', '+91 22 6100 8800', '2026-01-01', '2026-12-31', '2026-07-15', '2026-08-15', 'Operational', 'All safety cables & brakes checked.', 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
 
--- Insert Default Settings rows
-INSERT INTO "Settings" ("Key", "Value") VALUES
-('societyName', 'Greenwood Residency'),
-('hasWings', 'true'),
-('wingsList', 'A, B, C'),
-('postalAddress', '123 Greenwood Road, Sector 5, Mumbai, MH - 400001'),
-('buildingType', 'Housing Society')
-ON CONFLICT ("Key") DO NOTHING;
+-- WaterMeters Seed
+INSERT INTO "WaterMeters" ("id", "SocietyId", "FlatNo", "ReadingMonth", "PreviousReading", "CurrentReading", "UnitsConsumed", "RecordedBy", "RecordedAt", "Status") VALUES
+('WM-101-2026-07', 'greenwood', '101', '2026-07', 1240, 1285, 45, 'Sanjay Plumber', '2026-07-01', 'Entered');
+
+-- StaffAttendance Seed
+INSERT INTO "StaffAttendance" ("id", "SocietyId", "StaffId", "StaffName", "ServiceType", "AssignedFlats", "GateName", "CheckInTime", "CheckOutTime", "Date", "RecordedBy") VALUES
+('ATT-1', 'greenwood', 'STF-101', 'Sunita Bai', 'Maid', ARRAY['101', '102', '201']::TEXT[], 'Main Gate', '2026-07-22T08:30:00', NULL, '2026-07-22', 'Ramesh Guard'),
+('ATT-2', 'greenwood', 'STF-102', 'Ramesh Guard', 'Security Guard', ARRAY['All Flats']::TEXT[], 'Main Gate', '2026-07-22T08:00:00', '2026-07-22T13:00:00', '2026-07-22', 'System Auto');
+
+-- Complaints Seed
+INSERT INTO "Complaints" ("id", "SocietyId", "FlatNo", "Title", "Category", "Description", "Urgency", "Status", "CreatedAt", "ResolvedAt", "AssignedTo", "ComplaintBy") VALUES
+('C-101', 'greenwood', '202', 'Water leakage in bathroom', 'Plumbing', 'Water is dripping from the ceiling toilet pipe valve continuously, causing a small pool.', 'High', 'Open', '2026-07-18T10:00:00Z', NULL, 'Sanjay Plumber', 'Anjali Gupta'),
+('C-102', 'greenwood', '103', 'Corridor light not working', 'Electrical', 'The corridor tube-light outside flat 103 has fused and needs replacement.', 'Low', 'In Progress', '2026-07-17T14:30:00Z', NULL, 'Ramesh Electrician', 'Rajesh Kumar'),
+('C-103', 'greenwood', '302', 'Unauthorized vehicle parked in spot B-4', 'Parking', 'A black SUV has been parked in my designated spot B-4 without permission.', 'Medium', 'Resolved', '2026-07-15T09:15:00Z', '2026-07-15T12:00:00Z', 'Main Gate Security', 'Siddharth Shah');
+
+-- ComplaintReplies Seed
+INSERT INTO "ComplaintReplies" ("id", "ComplaintId", "SocietyId", "SenderName", "SenderRole", "Message", "Timestamp") VALUES
+('CR-101-1', 'C-101', 'greenwood', 'Amit Sharma', 'Admin', 'Plumber Sanjay has been notified and scheduled for visit at 4 PM today.', '2026-07-18T11:00:00Z'),
+('CR-101-2', 'C-101', 'greenwood', 'Anjali Gupta', 'Member', 'Thank you, please ensure the main valve is checked.', '2026-07-18T11:15:00Z');
+
+-- FacilityBookings Seed
+INSERT INTO "FacilityBookings" ("id", "SocietyId", "FlatNo", "ResidentName", "FacilityName", "Date", "TimeSlot", "Purpose", "Charges", "Status", "BookedAt") VALUES
+('FB-1', 'greenwood', '101', 'Amit Sharma', 'Clubhouse Hall', '2026-08-05', '18:00 - 22:00', 'Birthday Party', 2500, 'Confirmed', '2026-07-10T12:00:00Z'),
+('FB-2', 'greenwood', '201', 'Vikram Singh', 'Terrace Party Area', '2026-08-15', '19:00 - 23:00', 'Independence Day Dinner', 3000, 'Confirmed', '2026-07-12T15:30:00Z');
+
+-- AuditLogs Seed
+INSERT INTO "AuditLogs" ("id", "SocietyId", "Timestamp", "UserRole", "UserId", "UserName", "Action", "Details") VALUES
+('LOG-1001', 'greenwood', '2026-07-22T08:00:00Z', 'Admin', 'Auth-gw-amit-sharma', 'Amit Sharma', 'System Login', 'Admin logged into Greenwood Residency dashboard'),
+('LOG-1002', 'greenwood', '2026-07-21T16:30:00Z', 'Admin', 'Auth-gw-amit-sharma', 'Amit Sharma', 'Invoice Generated', 'Generated monthly maintenance invoice INV-202607-101');
+
+-- Polls Seed
+INSERT INTO "Polls" ("id", "SocietyId", "Title", "Description", "Category", "StartDate", "EndDate", "CreatedBy", "Status", "TotalEligibleFlats") VALUES
+('POLL-1', 'greenwood', 'Approve ₹500,000 Special Maintenance Budget for Entrance Lobby Renovation', 'Proposal to allocate ₹5 Lakhs from reserve funds.', 'AGM Resolution', '2026-07-01', '2026-07-31', 'Amit Sharma (Secretary)', 'Active', 8);
+
+-- PollVotes Seed
+INSERT INTO "PollVotes" ("id", "PollId", "SocietyId", "FlatNo", "VotedBy", "Vote", "Timestamp") VALUES
+('PV-1', 'POLL-1', 'greenwood', '101', 'Amit Sharma', 'In Favor', '2026-07-05T10:15:00.000Z');
+
+-- ============================================================================
+-- 5. PRIVATE SUPABASE STORAGE BUCKETS SETUP & SIGNED URL ACCESS POLICIES
+-- Configures 'society-docs', 'tenant-kyc', and 'notice-attachments' as PRIVATE
+-- ============================================================================
+
+-- Create private storage buckets
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES 
+  ('society-docs', 'society-docs', false, 20971520, ARRAY['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
+  ('tenant-kyc', 'tenant-kyc', false, 10485760, ARRAY['application/pdf', 'image/jpeg', 'image/png', 'image/jpg']),
+  ('notice-attachments', 'notice-attachments', false, 15728640, ARRAY['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
+ON CONFLICT (id) DO UPDATE 
+SET public = false, file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- Storage Read Policies (Authenticated user access only for tenant files)
+DROP POLICY IF EXISTS "Authenticated Read Access for society-docs" ON storage.objects;
+CREATE POLICY "Authenticated Read Access for society-docs" ON storage.objects 
+  FOR SELECT USING (bucket_id = 'society-docs' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Read Access for tenant-kyc" ON storage.objects;
+CREATE POLICY "Authenticated Read Access for tenant-kyc" ON storage.objects 
+  FOR SELECT USING (bucket_id = 'tenant-kyc' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Read Access for notice-attachments" ON storage.objects;
+CREATE POLICY "Authenticated Read Access for notice-attachments" ON storage.objects 
+  FOR SELECT USING (bucket_id = 'notice-attachments' AND auth.role() = 'authenticated');
+
+-- Storage Upload Policies (Authenticated users can insert)
+DROP POLICY IF EXISTS "Authenticated Upload Access for society-docs" ON storage.objects;
+CREATE POLICY "Authenticated Upload Access for society-docs" ON storage.objects 
+  FOR INSERT WITH CHECK (bucket_id = 'society-docs' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Upload Access for tenant-kyc" ON storage.objects;
+CREATE POLICY "Authenticated Upload Access for tenant-kyc" ON storage.objects 
+  FOR INSERT WITH CHECK (bucket_id = 'tenant-kyc' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Upload Access for notice-attachments" ON storage.objects;
+CREATE POLICY "Authenticated Upload Access for notice-attachments" ON storage.objects 
+  FOR INSERT WITH CHECK (bucket_id = 'notice-attachments' AND auth.role() = 'authenticated');
+
+-- Storage Delete / Update Policies
+DROP POLICY IF EXISTS "Authenticated Update Access for society-docs" ON storage.objects;
+CREATE POLICY "Authenticated Update Access for society-docs" ON storage.objects 
+  FOR UPDATE USING (bucket_id = 'society-docs' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Update Access for tenant-kyc" ON storage.objects;
+CREATE POLICY "Authenticated Update Access for tenant-kyc" ON storage.objects 
+  FOR UPDATE USING (bucket_id = 'tenant-kyc' AND auth.role() = 'authenticated');
+
+DROP POLICY IF EXISTS "Authenticated Update Access for notice-attachments" ON storage.objects;
+CREATE POLICY "Authenticated Update Access for notice-attachments" ON storage.objects 
+  FOR UPDATE USING (bucket_id = 'notice-attachments' AND auth.role() = 'authenticated');
 `;

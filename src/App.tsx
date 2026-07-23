@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Building2, 
   Sparkles, 
@@ -15,7 +15,7 @@ import {
   Key,
   Check
 } from 'lucide-react';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags } from './types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor } from './types';
 import { 
   MULTI_TENANT_MEMBERS, 
   MULTI_TENANT_PAYMENTS, 
@@ -33,7 +33,12 @@ import {
   INITIAL_GUEST_PARKINGS,
   INITIAL_SOCIETY_DOCUMENTS,
   INITIAL_ASSET_AMCS,
-  INITIAL_WATER_METERS
+  INITIAL_WATER_METERS,
+  INITIAL_POLLS,
+  INITIAL_POLL_VOTES,
+  INITIAL_STAFF,
+  INITIAL_STAFF_ATTENDANCE,
+  INITIAL_VENDORS
 } from './data/mockData';
 import { hashPassword, generateSalt, generateVisitorAccessToken } from './utils/security';
 import MobileSimulator from './components/MobileSimulator';
@@ -121,10 +126,12 @@ export default function App() {
 
   // Supabase Connection States
   const [supabaseUrl, setSupabaseUrl] = useState<string>(() => {
-    return localStorage.getItem('society_supabase_url') || 'https://czirnbiybxydsdzbimyw.supabase.co';
+    const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL || (process as any).env?.VITE_SUPABASE_URL;
+    return envUrl || localStorage.getItem('society_supabase_url') || '';
   });
   const [supabaseAnonKey, setSupabaseAnonKey] = useState<string>(() => {
-    return localStorage.getItem('society_supabase_anon_key') || '';
+    const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || (process as any).env?.VITE_SUPABASE_ANON_KEY;
+    return envKey || localStorage.getItem('society_supabase_anon_key') || '';
   });
   const [showCloudSyncModal, setShowCloudSyncModal] = useState(false);
   const [cloudSyncUrlInput, setCloudSyncUrlInput] = useState('');
@@ -176,6 +183,11 @@ export default function App() {
   const [societyDocuments, setSocietyDocuments] = useState<SocietyDocument[]>([]);
   const [assetAMCs, setAssetAMCs] = useState<AssetAMC[]>([]);
   const [waterMeters, setWaterMeters] = useState<WaterMeter[]>([]);
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [pollVotes, setPollVotes] = useState<PollVote[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [staffAttendanceList, setStaffAttendanceList] = useState<StaffAttendance[]>([]);
+  const [vendorList, setVendorList] = useState<Vendor[]>([]);
   const [lastSynced, setLastSynced] = useState<string>(() => localStorage.getItem('society_last_synced') || '');
 
   // Init Data from LocalStorage or Fallbacks
@@ -270,6 +282,11 @@ export default function App() {
     const localDocuments = localStorage.getItem('society_documents');
     const localAMCs = localStorage.getItem('society_asset_amcs');
     const localMeters = localStorage.getItem('society_water_meters');
+    const localPolls = localStorage.getItem('society_polls');
+    const localPollVotes = localStorage.getItem('society_poll_votes');
+    const localStaff = localStorage.getItem('society_staff');
+    const localStaffAttendance = localStorage.getItem('society_staff_attendance');
+    const localVendors = localStorage.getItem('society_vendors');
     
     const parsedRoles = getSafeList(localRoles, MULTI_TENANT_ROLES);
     let parsedAuths = getSafeList(localUserAuths, MULTI_TENANT_USER_AUTHS);
@@ -295,6 +312,11 @@ export default function App() {
     const parsedDocuments = getSafeList(localDocuments, INITIAL_SOCIETY_DOCUMENTS);
     const parsedAMCs = getSafeList(localAMCs, INITIAL_ASSET_AMCS);
     const parsedMeters = getSafeList(localMeters, INITIAL_WATER_METERS);
+    const parsedPolls = getSafeList(localPolls, INITIAL_POLLS);
+    const parsedPollVotes = getSafeList(localPollVotes, INITIAL_POLL_VOTES);
+    const parsedStaff = getSafeList(localStaff, INITIAL_STAFF);
+    const parsedStaffAttendance = getSafeList(localStaffAttendance, INITIAL_STAFF_ATTENDANCE);
+    const parsedVendors = getSafeList(localVendors, INITIAL_VENDORS);
 
     setEmergencyContacts(parsedEmergencyContacts);
     setTenants(parsedTenants);
@@ -303,6 +325,11 @@ export default function App() {
     setSocietyDocuments(parsedDocuments);
     setAssetAMCs(parsedAMCs);
     setWaterMeters(parsedMeters);
+    setPolls(parsedPolls);
+    setPollVotes(parsedPollVotes);
+    setStaffList(parsedStaff);
+    setStaffAttendanceList(parsedStaffAttendance);
+    setVendorList(parsedVendors);
 
     localStorage.setItem('society_emergency_contacts', JSON.stringify(parsedEmergencyContacts));
     localStorage.setItem('society_tenants', JSON.stringify(parsedTenants));
@@ -311,43 +338,72 @@ export default function App() {
     localStorage.setItem('society_documents', JSON.stringify(parsedDocuments));
     localStorage.setItem('society_asset_amcs', JSON.stringify(parsedAMCs));
     localStorage.setItem('society_water_meters', JSON.stringify(parsedMeters));
+    localStorage.setItem('society_polls', JSON.stringify(parsedPolls));
+    localStorage.setItem('society_poll_votes', JSON.stringify(parsedPollVotes));
+    localStorage.setItem('society_staff', JSON.stringify(parsedStaff));
+    localStorage.setItem('society_staff_attendance', JSON.stringify(parsedStaffAttendance));
+    localStorage.setItem('society_vendors', JSON.stringify(parsedVendors));
 
     if (savedUrl && savedKey) {
       setSupabaseUrl(savedUrl);
       setSupabaseAnonKey(savedKey);
-      syncWithSupabase(savedUrl, savedKey);
+      syncWithSupabase(savedUrl, savedKey, true);
     }
   }, []);
 
+  // Caching TTL & Background Sync Settings
+  const lastSyncTimestampRef = useRef<number>(0);
+  const CACHE_TTL_MS = 30000; // 30 seconds caching window to avoid redundant fetches on tab switching
+
+  // Auto-sync on window focus / tab switching if cache TTL expired
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && supabaseUrl && supabaseAnonKey) {
+        const now = Date.now();
+        if (now - lastSyncTimestampRef.current > CACHE_TTL_MS) {
+          syncWithSupabase(supabaseUrl, supabaseAnonKey, false);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [supabaseUrl, supabaseAnonKey]);
+
   // Save changes to local storage when database state updates
   const updateMembersState = (newMembers: Member[]) => {
+    lastSyncTimestampRef.current = Date.now();
     setMembers(newMembers);
     localStorage.setItem('society_members', JSON.stringify(newMembers));
   };
 
   const updatePaymentsState = (newPayments: Payment[]) => {
+    lastSyncTimestampRef.current = Date.now();
     setPayments(newPayments);
     localStorage.setItem('society_payments', JSON.stringify(newPayments));
   };
 
   const updateExpensesState = (newExpenses: Expense[]) => {
+    lastSyncTimestampRef.current = Date.now();
     setExpenses(newExpenses);
     localStorage.setItem('society_expenses', JSON.stringify(newExpenses));
   };
 
   const updateComplaintsState = (newComplaints: Complaint[]) => {
+    lastSyncTimestampRef.current = Date.now();
     setComplaints(newComplaints);
     localStorage.setItem('society_complaints', JSON.stringify(newComplaints));
   };
 
-  const updateInvoicesState = (newInvoices: Invoice[]) => {
-    setInvoices(newInvoices);
-    localStorage.setItem('society_invoices', JSON.stringify(newInvoices));
-  };
-
   const updateVisitorsState = (newVisitors: Visitor[]) => {
+    lastSyncTimestampRef.current = Date.now();
     setVisitors(newVisitors);
     localStorage.setItem('society_visitors', JSON.stringify(newVisitors));
+  };
+
+  const updateInvoicesState = (newInvoices: Invoice[]) => {
+    lastSyncTimestampRef.current = Date.now();
+    setInvoices(newInvoices);
+    localStorage.setItem('society_invoices', JSON.stringify(newInvoices));
   };
 
   const updateComplaintRepliesState = (newReplies: ComplaintReply[]) => {
@@ -398,6 +454,92 @@ export default function App() {
   const updateWaterMetersState = (newList: WaterMeter[]) => {
     setWaterMeters(newList);
     localStorage.setItem('society_water_meters', JSON.stringify(newList));
+  };
+
+  const updatePollsState = (newList: Poll[]) => {
+    setPolls(newList);
+    localStorage.setItem('society_polls', JSON.stringify(newList));
+  };
+
+  const updatePollVotesState = (newList: PollVote[]) => {
+    setPollVotes(newList);
+    localStorage.setItem('society_poll_votes', JSON.stringify(newList));
+  };
+
+  const updateStaffState = (newStaff: Staff[]) => {
+    setStaffList(newStaff);
+    localStorage.setItem('society_staff', JSON.stringify(newStaff));
+  };
+
+  const updateStaffAttendanceState = (newAtt: StaffAttendance[]) => {
+    setStaffAttendanceList(newAtt);
+    localStorage.setItem('society_staff_attendance', JSON.stringify(newAtt));
+  };
+
+  const updateVendorState = (newVendors: Vendor[]) => {
+    setVendorList(newVendors);
+    localStorage.setItem('society_vendors', JSON.stringify(newVendors));
+  };
+
+  const handleAddPoll = async (newPoll: Omit<Poll, 'id'>) => {
+    const poll: Poll = {
+      ...newPoll,
+      id: `POLL-${Date.now()}`
+    };
+    const nextPolls = [poll, ...polls];
+    updatePollsState(nextPolls);
+    handleAddAuditLog('Create Resolution Poll', `Created AGM resolution: ${poll.Title}`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/Polls`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(poll)
+        });
+      } catch (err) {
+        console.error('Failed to post Poll to Supabase:', err);
+      }
+    }
+  };
+
+  const handleCastVote = async (newVote: Omit<PollVote, 'id'>) => {
+    const vote: PollVote = {
+      ...newVote,
+      id: `PV-${Date.now()}`
+    };
+    // Replace vote if flat already voted on this poll, else append
+    const existingIdx = pollVotes.findIndex(v => v.PollId === vote.PollId && v.FlatNo === vote.FlatNo);
+    let nextVotes: PollVote[];
+    if (existingIdx >= 0) {
+      nextVotes = [...pollVotes];
+      nextVotes[existingIdx] = vote;
+    } else {
+      nextVotes = [...pollVotes, vote];
+    }
+    updatePollVotesState(nextVotes);
+    handleAddAuditLog('Cast Resolution Vote', `Flat ${vote.FlatNo} voted '${vote.Vote}' on poll ${vote.PollId}`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/PollVotes`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(vote)
+        });
+      } catch (err) {
+        console.error('Failed to post PollVote to Supabase:', err);
+      }
+    }
   };
 
   // Connect & Save Supabase Credentials
@@ -459,22 +601,57 @@ export default function App() {
           }
         }
 
-        // Insert fresh rows
-        const insertRes = await fetch(`${supabaseUrl}/rest/v1/${tableName}`, {
-          method: 'POST',
-          headers: headers,
-          body: JSON.stringify(normalizedRows)
-        });
-        
-        if (!insertRes.ok) {
+        // Insert fresh rows with automatic column-stripping retry if remote schema lacks columns
+        let currentPayload = normalizedRows;
+        let attempts = 0;
+        let strippedCols: string[] = [];
+
+        while (attempts < 15) {
+          attempts++;
+          const insertRes = await fetch(`${supabaseUrl}/rest/v1/${tableName}`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(currentPayload)
+          });
+          
+          if (insertRes.ok) {
+            if (strippedCols.length > 0) {
+              console.log(`Successfully seeded '${tableName}' after omitting column(s) missing from remote schema: ${strippedCols.join(', ')}.`);
+            }
+            return;
+          }
+
           const errText = await insertRes.text();
           let msg = '';
-          try { msg = JSON.parse(errText).message; } catch(e) { msg = errText; }
-          console.warn(`POST failed for ${tableName}:`, msg);
+          try { msg = JSON.parse(errText).message || JSON.parse(errText).hint || errText; } catch(e) { msg = errText; }
+          console.warn(`POST failed for ${tableName} (attempt ${attempts}):`, msg);
           
           if (insertRes.status === 404) {
             throw new Error(`Table "${tableName}" does not exist in your Supabase database. Please copy the updated script from the "SupabaseSchema.sql" tab and run it in your Supabase SQL Editor.`);
           }
+
+          if (msg.includes("row-level security policy") || msg.includes("RLS") || msg.includes("violates row-level security")) {
+            throw new Error(`Failed to seed "${tableName}": Row-Level Security (RLS) policy blocked client data insertion/deletion. Please copy the updated script from the "SupabaseSchema.sql" tab and run it in your Supabase SQL Editor to update permissions.`);
+          }
+
+          // Check if error is due to a missing column in Supabase schema cache
+          if (msg.includes("Could not find the") && msg.includes("column of")) {
+            const match = msg.match(/Could not find the '([^']+)' column/);
+            if (match && match[1]) {
+              const missingCol = match[1];
+              if (!strippedCols.includes(missingCol)) {
+                strippedCols.push(missingCol);
+              }
+              console.warn(`Column '${missingCol}' missing in remote Supabase table '${tableName}'. Stripping column and retrying...`);
+              currentPayload = currentPayload.map(row => {
+                const copy = { ...row };
+                delete copy[missingCol];
+                return copy;
+              });
+              continue;
+            }
+          }
+
           throw new Error(`Failed to seed "${tableName}": ${msg}`);
         }
       };
@@ -485,30 +662,10 @@ export default function App() {
         Name: s.Name,
         BuildingType: s.BuildingType,
         PostalAddress: s.PostalAddress,
-        Wings: s.Wings.join(', '),
+        Wings: Array.isArray(s.Wings) ? s.Wings : (s.Wings ? String(s.Wings).split(',').map(w => w.trim()).filter(Boolean) : []),
         HasWings: s.HasWings
       }));
       await clearAndInsert('Societies', formattedSocieties, 'id');
-
-      await clearAndInsert('Members', MULTI_TENANT_MEMBERS, 'id');
-      await clearAndInsert('Payments', MULTI_TENANT_PAYMENTS, 'id');
-      await clearAndInsert('Expenses', MULTI_TENANT_EXPENSES, 'id');
-      await clearAndInsert('Complaints', MULTI_TENANT_COMPLAINTS, 'id');
-      await clearAndInsert('Notices', MULTI_TENANT_NOTICES, 'id');
-      await clearAndInsert('Invoices', MULTI_TENANT_INVOICES, 'id');
-      await clearAndInsert('Visitors', MULTI_TENANT_VISITORS, 'id');
-      await clearAndInsert('ComplaintReplies', MULTI_TENANT_COMPLAINT_REPLIES, 'id');
-
-      // Seed Tier 1 tables
-      await clearAndInsert('EmergencyContacts', INITIAL_EMERGENCY_CONTACTS, 'id');
-      await clearAndInsert('Tenants', INITIAL_TENANTS, 'id');
-      await clearAndInsert('Vehicles', INITIAL_VEHICLES, 'id');
-      await clearAndInsert('GuestParking', INITIAL_GUEST_PARKINGS, 'id');
-
-      // Seed Tier 2 tables
-      await clearAndInsert('SocietyDocuments', INITIAL_SOCIETY_DOCUMENTS, 'id');
-      await clearAndInsert('AssetAMCs', INITIAL_ASSET_AMCS, 'id');
-      await clearAndInsert('WaterMeters', INITIAL_WATER_METERS, 'id');
 
       // Seed Roles and UserAuth tables
       await clearAndInsert('Roles', MULTI_TENANT_ROLES, 'id');
@@ -526,6 +683,98 @@ export default function App() {
         };
       });
       await clearAndInsert('UserAuth', formattedAuths, 'id');
+
+      // Seed parent tables before child tables (Vendors before Expenses, Members before Payments, etc.)
+      await clearAndInsert('Members', MULTI_TENANT_MEMBERS, 'id');
+
+      const formattedVendors = INITIAL_VENDORS.map(v => ({
+        ...v,
+        VendorName: v.VendorName || v.Name || 'Unknown Vendor',
+        Name: v.Name || v.VendorName || 'Unknown Vendor'
+      }));
+      await clearAndInsert('Vendors', formattedVendors, 'id');
+
+      await clearAndInsert('Staff', INITIAL_STAFF, 'id');
+      await clearAndInsert('Polls', INITIAL_POLLS, 'id');
+
+      const formattedComplaints = MULTI_TENANT_COMPLAINTS.map(c => ({
+        ...c,
+        CreatedAt: (c as any).CreatedAt || (c as any).Date || new Date().toISOString()
+      }));
+      await clearAndInsert('Complaints', formattedComplaints, 'id');
+
+      // Seed child/dependent tables
+      await clearAndInsert('Payments', MULTI_TENANT_PAYMENTS, 'id');
+      await clearAndInsert('Expenses', MULTI_TENANT_EXPENSES, 'id');
+      await clearAndInsert('Notices', MULTI_TENANT_NOTICES, 'id');
+
+      const formattedInvoices = MULTI_TENANT_INVOICES.map((inv, idx) => ({
+        ...inv,
+        InvoiceNo: (inv as any).InvoiceNo || inv.id || `INV-${inv.SocietyId}-${idx + 100}`,
+        BillingPeriod: (inv as any).BillingPeriod || (inv as any).BillMonth || 'July 2026',
+        GeneratedDate: (inv as any).GeneratedDate || (inv as any).IssuedDate || new Date().toISOString().split('T')[0],
+        DueDate: inv.DueDate || new Date().toISOString().split('T')[0],
+        MaintenanceCharge: (inv as any).MaintenanceCharge ?? (inv as any).BaseAmount ?? 2000,
+        UtilityCharge: (inv as any).UtilityCharge ?? (inv as any).SecurityCharges ?? 0,
+        WaterCharge: (inv as any).WaterCharge ?? (inv as any).WaterCharges ?? 0,
+        ParkingCharge: (inv as any).ParkingCharge ?? (inv as any).ParkingCharges ?? 0,
+        LateFee: (inv as any).LateFee ?? (inv as any).LateFeeCharges ?? 0,
+        PreviousArrears: (inv as any).PreviousArrears ?? 0,
+        TotalAmount: inv.TotalAmount ?? 2000,
+        Status: inv.Status || 'Unpaid'
+      }));
+      await clearAndInsert('Invoices', formattedInvoices, 'id');
+
+      const formattedVisitors = MULTI_TENANT_VISITORS.map(v => ({
+        ...v,
+        Phone: (v as any).Phone || (v as any).ContactNo || '+91 99999 99999',
+        VisitorName: v.VisitorName || 'Guest Visitor',
+        Purpose: v.Purpose || 'Guest',
+        CheckInTime: v.CheckInTime || new Date().toISOString(),
+        Status: v.Status || 'Approved'
+      }));
+      await clearAndInsert('Visitors', formattedVisitors, 'id');
+
+      const formattedComplaintReplies = MULTI_TENANT_COMPLAINT_REPLIES.map(r => {
+        const complaintExists = formattedComplaints.some(c => c.id === r.ComplaintId);
+        return {
+          ...r,
+          ComplaintId: complaintExists ? r.ComplaintId : (formattedComplaints[0]?.id || 'C-101')
+        };
+      });
+      await clearAndInsert('ComplaintReplies', formattedComplaintReplies, 'id');
+
+      // Seed Tier 1 tables
+      await clearAndInsert('EmergencyContacts', INITIAL_EMERGENCY_CONTACTS, 'id');
+
+      const formattedTenants = INITIAL_TENANTS.map(t => ({
+        ...t,
+        Email: t.Email || `${t.TenantName.toLowerCase().replace(/\s+/g, '')}@example.com`,
+        ContactNo: t.ContactNo || '+91 99999 99999'
+      }));
+      await clearAndInsert('Tenants', formattedTenants, 'id');
+      await clearAndInsert('Vehicles', INITIAL_VEHICLES, 'id');
+      await clearAndInsert('GuestParking', INITIAL_GUEST_PARKINGS, 'id');
+
+      // Seed Tier 2 tables
+      await clearAndInsert('SocietyDocuments', INITIAL_SOCIETY_DOCUMENTS, 'id');
+      await clearAndInsert('AssetAMCs', INITIAL_ASSET_AMCS, 'id');
+      await clearAndInsert('WaterMeters', INITIAL_WATER_METERS, 'id');
+
+      // Seed child tables referencing Staff & Polls
+      const formattedStaffAttendance = INITIAL_STAFF_ATTENDANCE.map(sa => ({
+        ...sa,
+        RecordedBy: (sa as any).RecordedBy || (sa as any).GatekeeperName || 'Main Gate Security'
+      }));
+      await clearAndInsert('StaffAttendance', formattedStaffAttendance, 'id');
+
+      const formattedPollVotes = INITIAL_POLL_VOTES.map(pv => ({
+        ...pv,
+        VotedBy: (pv as any).VotedBy || 'Member',
+        Vote: (pv as any).Vote || 'In Favor',
+        VotedAt: (pv as any).VotedAt || (pv as any).Timestamp || new Date().toISOString()
+      }));
+      await clearAndInsert('PollVotes', formattedPollVotes, 'id');
 
       // Seed settings (for backwards compatibility)
       const settingsRows = [
@@ -568,10 +817,18 @@ export default function App() {
   };
 
   // FETCH Data from real Supabase PostgREST API
-  const syncWithSupabase = async (targetUrl = supabaseUrl, targetKey = supabaseAnonKey) => {
+  const syncWithSupabase = async (targetUrl = supabaseUrl, targetKey = supabaseAnonKey, force = false) => {
     const cleanUrl = (targetUrl || '').trim();
     const cleanKey = (targetKey || '').trim();
     if (!cleanUrl || !cleanKey) return;
+
+    // Caching layer: skip redundant network queries if fetched within TTL window (unless force = true)
+    const now = Date.now();
+    if (!force && lastSyncTimestampRef.current > 0 && (now - lastSyncTimestampRef.current < CACHE_TTL_MS)) {
+      console.log('Using active client state cache (TTL active)');
+      return;
+    }
+    lastSyncTimestampRef.current = now;
 
     try {
       const getHeaders = {
@@ -580,9 +837,9 @@ export default function App() {
         'Content-Type': 'application/json'
       };
 
-      const safeFetchJson = async (tableName: string) => {
+      const safeFetchJson = async (tableName: string, selectCols: string = '*') => {
         try {
-          const url = `${cleanUrl}/rest/v1/${tableName}?select=*`;
+          const url = `${cleanUrl}/rest/v1/${tableName}?select=${selectCols}`;
           const response = await fetch(url, { headers: getHeaders });
           if (!response.ok) {
             console.warn(`Fetch returned status ${response.status} for table ${tableName}`);
@@ -596,7 +853,7 @@ export default function App() {
       };
 
       // 0. Fetch Societies
-      const societiesData = await safeFetchJson('Societies');
+      const societiesData = await safeFetchJson('Societies', 'id,Name,BuildingType,PostalAddress,Wings,HasWings,StructureType,Towers');
       if (Array.isArray(societiesData) && societiesData.length > 0) {
         let formattedSocs: Society[] = societiesData.map(s => ({
           id: String(s.id),
@@ -629,8 +886,8 @@ export default function App() {
         localStorage.setItem('society_list_all', JSON.stringify(formattedSocs));
       }
 
-      // 1. Fetch Members
-      const membersData = await safeFetchJson('Members');
+      // 1. Fetch Members with optimized projection
+      const membersData = await safeFetchJson('Members', 'id,SocietyId,FlatNo,OwnerName,ContactNo,Email,Balance,Status,CoOwners,VehicleNo,Wing');
       if (Array.isArray(membersData) && membersData.length > 0) {
         const formatted: Member[] = membersData
           .filter(m => m && m.FlatNo)
@@ -660,8 +917,8 @@ export default function App() {
         updateMembersState(mergedMembers);
       }
 
-      // 2. Fetch Payments
-      const paymentsData = await safeFetchJson('Payments');
+      // 2. Fetch Payments with optimized projection
+      const paymentsData = await safeFetchJson('Payments', 'id,SocietyId,MemberId,Date,FlatNo,OwnerName,Amount,Mode,ReferenceNo,Status');
       if (Array.isArray(paymentsData)) {
         const formatted: Payment[] = paymentsData
           .filter(p => p && p.FlatNo)
@@ -680,8 +937,8 @@ export default function App() {
         updatePaymentsState(formatted);
       }
 
-      // 3. Fetch Expenses
-      const expensesData = await safeFetchJson('Expenses');
+      // 3. Fetch Expenses with optimized projection
+      const expensesData = await safeFetchJson('Expenses', 'id,SocietyId,Date,Category,Amount,Vendor,InvoiceNo,ApprovedBy,Status,RequiresDualApproval,SecretaryApproved,SecretaryApprovedBy,TreasurerApproved,TreasurerApprovedBy,VendorId');
       if (Array.isArray(expensesData)) {
         const formatted: Expense[] = expensesData
           .filter(e => e && e.Amount)
@@ -693,13 +950,20 @@ export default function App() {
             Amount: parseFloat(String(e.Amount || 0)) || 0,
             Vendor: e.Vendor || '',
             InvoiceNo: e.InvoiceNo || '',
-            ApprovedBy: e.ApprovedBy || 'Committee'
+            ApprovedBy: e.ApprovedBy || 'Committee',
+            Status: e.Status || 'Approved',
+            RequiresDualApproval: e.RequiresDualApproval === true || e.RequiresDualApproval === 'true',
+            SecretaryApproved: e.SecretaryApproved === true || e.SecretaryApproved === 'true',
+            SecretaryApprovedBy: e.SecretaryApprovedBy || undefined,
+            TreasurerApproved: e.TreasurerApproved === true || e.TreasurerApproved === 'true',
+            TreasurerApprovedBy: e.TreasurerApprovedBy || undefined,
+            VendorId: e.VendorId || undefined
           })).sort((a,b) => b.Date.localeCompare(a.Date));
         updateExpensesState(formatted);
       }
 
-      // 4. Fetch Complaints
-      const complaintsData = await safeFetchJson('Complaints');
+      // 4. Fetch Complaints with optimized projection
+      const complaintsData = await safeFetchJson('Complaints', 'id,SocietyId,MemberId,FlatNo,Category,Title,Description,Date,Status,Urgency');
       if (Array.isArray(complaintsData)) {
         const formatted: Complaint[] = complaintsData
           .filter(c => c && c.id)
@@ -718,8 +982,8 @@ export default function App() {
         updateComplaintsState(formatted);
       }
 
-      // 5. Fetch Notices
-      const noticesData = await safeFetchJson('Notices');
+      // 5. Fetch Notices with optimized projection
+      const noticesData = await safeFetchJson('Notices', 'id,SocietyId,Date,Title,Category,Content,AttachmentUrl,PostedBy');
       if (Array.isArray(noticesData)) {
         const formatted: Notice[] = noticesData
           .filter(n => n && n.id)
@@ -737,8 +1001,8 @@ export default function App() {
         localStorage.setItem('society_notices', JSON.stringify(formatted));
       }
 
-      // 6. Fetch AuditLogs
-      const auditLogsData = await safeFetchJson('AuditLogs');
+      // 6. Fetch AuditLogs with optimized projection
+      const auditLogsData = await safeFetchJson('AuditLogs', 'id,SocietyId,Timestamp,UserRole,UserId,UserName,Action,Details');
       if (Array.isArray(auditLogsData)) {
         const formatted: AuditLog[] = auditLogsData
           .filter(al => al && al.id)
@@ -756,8 +1020,8 @@ export default function App() {
         localStorage.setItem('society_audit_logs', JSON.stringify(formatted));
       }
 
-      // 7. Fetch Invoices
-      const invoicesData = await safeFetchJson('Invoices');
+      // 7. Fetch Invoices with optimized projection
+      const invoicesData = await safeFetchJson('Invoices', 'id,SocietyId,BillMonth,FlatNo,OwnerName,BaseAmount,WaterCharges,SecurityCharges,ParkingCharges,TotalAmount,DueDate,Status,IssuedDate');
       if (Array.isArray(invoicesData)) {
         const formatted: Invoice[] = invoicesData
           .filter(i => i && i.id)
@@ -779,8 +1043,8 @@ export default function App() {
         updateInvoicesState(formatted);
       }
 
-      // 8. Fetch Visitors
-      const visitorsData = await safeFetchJson('Visitors');
+      // 8. Fetch Visitors with optimized projection
+      const visitorsData = await safeFetchJson('Visitors', 'id,SocietyId,FlatNo,VisitorName,Purpose,ContactNo,VehicleNo,CheckInTime,CheckOutTime,Status,HostApprovedBy');
       if (Array.isArray(visitorsData)) {
         const formatted: Visitor[] = visitorsData
           .filter(v => v && v.id)
@@ -969,6 +1233,38 @@ export default function App() {
         updateWaterMetersState(formatted);
       }
 
+      // 19. Fetch Polls & Resolutions
+      const pollsData = await safeFetchJson('Polls');
+      if (Array.isArray(pollsData) && pollsData.length > 0) {
+        const formatted: Poll[] = pollsData.map(p => ({
+          id: String(p.id),
+          SocietyId: p.SocietyId || 'greenwood',
+          Title: p.Title || '',
+          Description: p.Description || '',
+          Category: p.Category || 'AGM Resolution',
+          StartDate: p.StartDate || '',
+          EndDate: p.EndDate || '',
+          Status: p.Status || 'Active',
+          CreatedBy: p.CreatedBy || 'Secretary'
+        })).sort((a,b) => b.StartDate.localeCompare(a.StartDate));
+        updatePollsState(formatted);
+      }
+
+      // 20. Fetch PollVotes
+      const pollVotesData = await safeFetchJson('PollVotes');
+      if (Array.isArray(pollVotesData)) {
+        const formatted: PollVote[] = pollVotesData.map(v => ({
+          id: String(v.id),
+          PollId: String(v.PollId || ''),
+          SocietyId: v.SocietyId || 'greenwood',
+          FlatNo: String(v.FlatNo || ''),
+          VotedBy: v.VotedBy || '',
+          Vote: v.Vote || 'Abstain',
+          Timestamp: v.Timestamp || v.VotedAt || new Date().toISOString()
+        }));
+        updatePollVotesState(formatted);
+      }
+
       const timeString = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
       setLastSynced(timeString);
       localStorage.setItem('society_last_synced', timeString);
@@ -1087,17 +1383,23 @@ export default function App() {
   };
 
   const handleAddExpense = async (newExp: Omit<Expense, 'id'>) => {
+    const isDualRequired = newExp.Amount > 5000;
     const loggedExpense: Expense = {
       ...newExp,
       id: `E-${Date.now()}`,
-      SocietyId: activeSocietyId
+      SocietyId: activeSocietyId,
+      RequiresDualApproval: isDualRequired,
+      Status: isDualRequired ? 'Pending Approval' : 'Approved',
+      ApprovedBy: isDualRequired ? 'Pending Dual Signoff (Secretary & Treasurer)' : (newExp.ApprovedBy || 'Committee'),
+      SecretaryApproved: !isDualRequired,
+      TreasurerApproved: !isDualRequired
     };
 
     const nextExpenses = [loggedExpense, ...expenses];
     updateExpensesState(nextExpenses);
 
     // Log action
-    handleAddAuditLog('Log Expense', `Recorded expense of ₹${newExp.Amount} for category '${newExp.Category}' paid to ${newExp.Vendor}`);
+    handleAddAuditLog('Log Expense', `Recorded expense of ₹${newExp.Amount} for '${newExp.Category}' paid to ${newExp.Vendor}. Dual Approval Required: ${isDualRequired ? 'YES' : 'NO'}`);
 
     if (supabaseUrl && supabaseAnonKey) {
       try {
@@ -1116,13 +1418,192 @@ export default function App() {
             Amount: loggedExpense.Amount,
             Vendor: loggedExpense.Vendor,
             InvoiceNo: loggedExpense.InvoiceNo,
-            ApprovedBy: loggedExpense.ApprovedBy || 'Committee'
+            ApprovedBy: loggedExpense.ApprovedBy,
+            Status: loggedExpense.Status,
+            RequiresDualApproval: loggedExpense.RequiresDualApproval,
+            SecretaryApproved: loggedExpense.SecretaryApproved,
+            TreasurerApproved: loggedExpense.TreasurerApproved
           })
         });
       } catch (err) {
         console.error('Failed to post expense row to Supabase:', err);
       }
     }
+  };
+
+  // Staff Handlers
+  const handleAddStaff = async (staff: Omit<Staff, 'id'>) => {
+    const newStaff: Staff = {
+      ...staff,
+      id: `STF-${Math.floor(100 + Math.random() * 900)}`,
+      SocietyId: activeSocietyId,
+      Passcode: staff.Passcode || `${Math.floor(1000 + Math.random() * 9000)}`,
+      GateStatus: staff.GateStatus || 'Checked Out',
+      IdVerificationStatus: staff.IdVerificationStatus || 'Pending'
+    };
+    const updated = [newStaff, ...staffList];
+    updateStaffState(updated);
+    handleAddAuditLog('Register Domestic Staff', `Registered staff ${staff.Name} (${staff.ServiceType}) assigned to Flats: ${staff.AssignedFlats.join(', ')}`);
+  };
+
+  const handleUpdateStaff = async (id: string, staffData: Partial<Staff>) => {
+    const updated = staffList.map(s => s.id === id ? { ...s, ...staffData } : s);
+    updateStaffState(updated);
+    handleAddAuditLog('Update Staff Profile', `Updated staff record for ID: ${id}`);
+  };
+
+  const handleDeleteStaff = async (id: string) => {
+    const staff = staffList.find(s => s.id === id);
+    const updated = staffList.filter(s => s.id !== id);
+    updateStaffState(updated);
+    handleAddAuditLog('Remove Staff Member', `Removed staff member ${staff?.Name || id}`);
+  };
+
+  const handleStaffCheckIn = async (staffId: string, passcode?: string, gatekeeperName: string = 'Main Gate Security') => {
+    const staff = staffList.find(s => s.id === staffId || s.Passcode === passcode);
+    if (!staff) return;
+
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split('T')[0];
+
+    const updatedStaff = staffList.map(s => s.id === staff.id ? { ...s, GateStatus: 'Inside' as const, LastCheckIn: nowIso } : s);
+    updateStaffState(updatedStaff);
+
+    const newAttendance: StaffAttendance = {
+      id: `ATT-${Date.now()}`,
+      SocietyId: activeSocietyId,
+      StaffId: staff.id,
+      StaffName: staff.Name,
+      ServiceType: staff.ServiceType,
+      CheckInTime: nowIso,
+      CheckOutTime: null,
+      Date: todayStr,
+      PasscodeUsed: passcode || staff.Passcode,
+      GatekeeperName: gatekeeperName,
+      Status: 'Inside'
+    };
+    updateStaffAttendanceState([newAttendance, ...staffAttendanceList]);
+
+    handleAddAuditLog('Staff Gate Check-In', `${staff.Name} (${staff.ServiceType}) entered society grounds. Passcode verified.`);
+  };
+
+  const handleStaffCheckOut = async (staffId: string) => {
+    const staff = staffList.find(s => s.id === staffId);
+    if (!staff) return;
+
+    const nowIso = new Date().toISOString();
+
+    const updatedStaff = staffList.map(s => s.id === staff.id ? { ...s, GateStatus: 'Checked Out' as const, LastCheckOut: nowIso } : s);
+    updateStaffState(updatedStaff);
+
+    const updatedAtt = staffAttendanceList.map(a => {
+      if (a.StaffId === staff.id && a.Status === 'Inside') {
+        return { ...a, CheckOutTime: nowIso, Status: 'Checked Out' as const };
+      }
+      return a;
+    });
+    updateStaffAttendanceState(updatedAtt);
+
+    handleAddAuditLog('Staff Gate Check-Out', `${staff.Name} (${staff.ServiceType}) checked out of society.`);
+  };
+
+  // Vendor Handlers
+  const handleAddVendor = async (vendor: Omit<Vendor, 'id'>) => {
+    const newVendor: Vendor = {
+      ...vendor,
+      id: `VEND-${Math.floor(100 + Math.random() * 900)}`,
+      SocietyId: activeSocietyId
+    };
+    const updated = [newVendor, ...vendorList];
+    updateVendorState(updated);
+    handleAddAuditLog('Add Vendor', `Registered vendor '${vendor.Name}' (${vendor.ServiceCategory}) GST: ${vendor.GstNumber}`);
+  };
+
+  const handleUpdateVendor = async (id: string, vendorData: Partial<Vendor>) => {
+    const updated = vendorList.map(v => v.id === id ? { ...v, ...vendorData } : v);
+    updateVendorState(updated);
+    handleAddAuditLog('Update Vendor', `Updated record for vendor ID: ${id}`);
+  };
+
+  const handleDeleteVendor = async (id: string) => {
+    const vendor = vendorList.find(v => v.id === id);
+    const updated = vendorList.filter(v => v.id !== id);
+    updateVendorState(updated);
+    handleAddAuditLog('Delete Vendor', `Deleted vendor '${vendor?.Name || id}'`);
+  };
+
+  // Expense Dual Approvals
+  const handleApproveExpenseSecretary = async (expenseId: string, secretaryName: string) => {
+    const exp = expenses.find(e => e.id === expenseId);
+    if (!exp) return;
+
+    const nowIso = new Date().toISOString();
+    const isFullyApproved = exp.TreasurerApproved === true || !exp.RequiresDualApproval;
+    const nextStatus = isFullyApproved ? 'Approved' : 'Pending Approval';
+    const nextApprovedBy = isFullyApproved ? `Dual Approved (${secretaryName} & ${exp.TreasurerApprovedBy || 'Treasurer'})` : `Approved by Secretary (${secretaryName})`;
+
+    const updatedExpenses = expenses.map(e => {
+      if (e.id === expenseId) {
+        return {
+          ...e,
+          SecretaryApproved: true,
+          SecretaryApprovedBy: secretaryName,
+          SecretaryApprovedAt: nowIso,
+          Status: nextStatus as any,
+          ApprovedBy: nextApprovedBy
+        };
+      }
+      return e;
+    });
+
+    updateExpensesState(updatedExpenses);
+    handleAddAuditLog('Secretary Expense Approval', `Secretary (${secretaryName}) approved expense ${exp.id} of ₹${exp.Amount} paid to ${exp.Vendor}.`);
+  };
+
+  const handleApproveExpenseTreasurer = async (expenseId: string, treasurerName: string) => {
+    const exp = expenses.find(e => e.id === expenseId);
+    if (!exp) return;
+
+    const nowIso = new Date().toISOString();
+    const isFullyApproved = exp.SecretaryApproved === true || !exp.RequiresDualApproval;
+    const nextStatus = isFullyApproved ? 'Approved' : 'Pending Approval';
+    const nextApprovedBy = isFullyApproved ? `Dual Approved (${exp.SecretaryApprovedBy || 'Secretary'} & ${treasurerName})` : `Approved by Treasurer (${treasurerName})`;
+
+    const updatedExpenses = expenses.map(e => {
+      if (e.id === expenseId) {
+        return {
+          ...e,
+          TreasurerApproved: true,
+          TreasurerApprovedBy: treasurerName,
+          TreasurerApprovedAt: nowIso,
+          Status: nextStatus as any,
+          ApprovedBy: nextApprovedBy
+        };
+      }
+      return e;
+    });
+
+    updateExpensesState(updatedExpenses);
+    handleAddAuditLog('Treasurer Expense Approval', `Treasurer (${treasurerName}) approved expense ${exp.id} of ₹${exp.Amount} paid to ${exp.Vendor}.`);
+  };
+
+  const handleRejectExpense = async (expenseId: string, reason?: string) => {
+    const exp = expenses.find(e => e.id === expenseId);
+    if (!exp) return;
+
+    const updatedExpenses = expenses.map(e => {
+      if (e.id === expenseId) {
+        return {
+          ...e,
+          Status: 'Rejected' as const,
+          ApprovedBy: `Rejected: ${reason || 'Over-budget / Discrepancy'}`
+        };
+      }
+      return e;
+    });
+
+    updateExpensesState(updatedExpenses);
+    handleAddAuditLog('Reject Expense', `Expense ${exp.id} of ₹${exp.Amount} for ${exp.Vendor} rejected. Reason: ${reason || 'Not specified'}`);
   };
 
   const handleAddComplaint = async (newComp: Omit<Complaint, 'id'>) => {
@@ -1237,7 +1718,20 @@ export default function App() {
     type: string,
     structureType?: 'standalone' | 'wings' | 'towers_wings',
     towers?: any[],
-    features?: FeatureFlags
+    features?: FeatureFlags,
+    billingAndGateway?: {
+      BillingMode?: 'Flat Rate' | 'SqFt Rate' | 'Hybrid';
+      RatePerSqFt?: number;
+      FlatRateAmount?: number;
+      BaseUtilityAmount?: number;
+      LateFeeType?: 'Interest' | 'Fixed';
+      LateFeeValue?: number;
+      DueDateDay?: number;
+      GatewayEnabled?: boolean;
+      GatewayProvider?: 'Razorpay' | 'Cashfree' | 'Manual';
+      GatewayApiKey?: string;
+      UPI_ID?: string;
+    }
   ) => {
     const updatedSocieties = societies.map(s => {
       if (s.id === activeSocietyId) {
@@ -1250,7 +1744,8 @@ export default function App() {
           BuildingType: type,
           StructureType: structureType || (wingsEnabled ? 'wings' : 'standalone'),
           Towers: towers,
-          FeaturesEnabled: features || s.FeaturesEnabled
+          FeaturesEnabled: features || s.FeaturesEnabled,
+          ...(billingAndGateway || {})
         };
       }
       return s;
@@ -1268,7 +1763,7 @@ export default function App() {
           id: activeSocietyId,
           Name: name,
           HasWings: wingsEnabled,
-          Wings: wings.join(', '),
+          Wings: Array.isArray(wings) ? wings : (wings ? String(wings).split(',').map(w => w.trim()).filter(Boolean) : []),
           PostalAddress: address,
           BuildingType: type,
           StructureType: structureType || (wingsEnabled ? 'wings' : 'standalone'),
@@ -1708,7 +2203,7 @@ export default function App() {
           Name: name,
           BuildingType: type,
           PostalAddress: address,
-          Wings: wings.join(', '),
+          Wings: Array.isArray(wings) ? wings : (wings ? String(wings).split(',').map(w => w.trim()).filter(Boolean) : []),
           HasWings: wingsEnabled
         })
       }).catch(err => console.warn('Failed to register new society in Supabase:', err));
@@ -2366,11 +2861,27 @@ export default function App() {
             societyDocuments={filteredSocietyDocuments}
             assetAMCs={filteredAssetAMCs}
             waterMeters={filteredWaterMeters}
+            polls={polls.filter(p => p.SocietyId === activeSocietyId)}
+            pollVotes={pollVotes.filter(pv => pv.SocietyId === activeSocietyId)}
+            staffList={staffList.filter(s => s.SocietyId === activeSocietyId)}
+            staffAttendanceList={staffAttendanceList.filter(sa => sa.SocietyId === activeSocietyId)}
+            vendorList={vendorList.filter(v => v.SocietyId === activeSocietyId)}
             auditLogs={auditLogs.filter(al => al.SocietyId === activeSocietyId)}
             roles={roles}
             userAuths={userAuths}
             onUpdateRoles={updateRolesState}
             onUpdateUserAuths={updateUserAuthsState}
+            onAddStaff={handleAddStaff}
+            onUpdateStaff={handleUpdateStaff}
+            onDeleteStaff={handleDeleteStaff}
+            onStaffCheckIn={handleStaffCheckIn}
+            onStaffCheckOut={handleStaffCheckOut}
+            onAddVendor={handleAddVendor}
+            onUpdateVendor={handleUpdateVendor}
+            onDeleteVendor={handleDeleteVendor}
+            onApproveExpenseSecretary={handleApproveExpenseSecretary}
+            onApproveExpenseTreasurer={handleApproveExpenseTreasurer}
+            onRejectExpense={handleRejectExpense}
             onAddPayment={handleAddPayment}
             onAddExpense={handleAddExpense}
             onAddComplaint={handleAddComplaint}
@@ -2397,7 +2908,9 @@ export default function App() {
             onDeleteAssetAMC={handleDeleteAssetAMC}
             onAddWaterMeter={handleAddWaterMeter}
             onBatchAddWaterMeters={handleBatchAddWaterMeters}
-            onRefresh={async () => syncWithSupabase()}
+            onAddPoll={handleAddPoll}
+            onCastVote={handleCastVote}
+            onRefresh={async () => syncWithSupabase(supabaseUrl, supabaseAnonKey, true)}
             scriptUrl={supabaseAnonKey ? 'Connected' : ''}
             societyName={societyName}
             hasWings={hasWings}
