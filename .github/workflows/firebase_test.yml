@@ -32,7 +32,7 @@ jobs:
           npm install
           npm run build
 
-      # 5. Initialize Capacitor & create the Android platform
+      # 5. Setup Capacitor & Add Android Platform
       - name: Setup Capacitor and Add Android Platform
         run: |
           npm install @capacitor/core @capacitor/android @capacitor/cli
@@ -40,25 +40,41 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      # 6. Build the Android Debug APK
+      # 6. Inject resolution strategy to eliminate duplicate Kotlin stdlib classes
+      - name: Fix Duplicate Kotlin Classes
+        run: |
+          echo '
+          subprojects {
+              configurations.all {
+                  resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                      if (details.requested.group == "org.jetbrains.kotlin" && 
+                         (details.requested.name == "kotlin-stdlib-jdk7" || details.requested.name == "kotlin-stdlib-jdk8")) {
+                          details.useVersion "1.8.22"
+                      }
+                  }
+              }
+          }
+          ' >> android/build.gradle
+
+      # 7. Build the Android Debug APK
       - name: Build Android APK
         run: |
           cd android
           gradle wrapper
           ./gradlew assembleDebug
 
-      # 7. Authenticate to Google Cloud
+      # 8. Authenticate to Google Cloud
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v2'
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      # 8. Setup Cloud SDK
+      # 9. Setup Cloud SDK
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v2'
 
-      # 9. Run Robo Test on Firebase Test Lab
+      # 10. Run Robo Test on Firebase Test Lab
       - name: 'Run Robo Test on Firebase Test Lab'
         run: |
           gcloud firebase test android run \
