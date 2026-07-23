@@ -95,7 +95,12 @@ jobs:
           npx firebase-tools appdistribution:distribute android/app/build/outputs/apk/debug/app-debug.apk \
             --app "$FIREBASE_APP_ID" \
             --groups "testers" \
-            --release-notes "Automated CI/CD build triggered by commit ${{ github.sha }}"
+            --release-notes "Automated CI/CD build triggered by commit ${{ github.sha }}" || {
+              echo "::error ::Firebase App Distribution upload failed with HTTP 403 permission error."
+              echo "To fix this, ensure your Service Account has the 'Firebase App Distribution Admin' role assigned in GCP Console."
+              rm -f service-account.json
+              exit 1
+            }
           rm -f service-account.json
         env:
           FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
