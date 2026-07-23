@@ -84,8 +84,19 @@ jobs:
           ./gradlew assembleDebug
 
       - name: Upload to Firebase App Distribution
-        uses: w9jds/firebase-action@v11.16.0
-        with:
-          args: appdistribution:distribute android/app/build/outputs/apk/debug/app-debug.apk --app "${{ secrets.FIREBASE_ANDROID_APP_ID }}" --groups "testers" --release-notes "Automated CI/CD build triggered by commit ${{ github.sha }}"
+        run: |
+          if [ -z "$FIREBASE_SA_KEY" ] || [ -z "$FIREBASE_APP_ID" ]; then
+            echo "::warning ::FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_ANDROID_APP_ID secret is not configured in GitHub repository settings."
+            echo "Please add these secrets under Repository Settings -> Secrets and variables -> Actions to enable automatic APK distribution."
+            exit 0
+          fi
+          echo "$FIREBASE_SA_KEY" > service-account.json
+          export GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/service-account.json
+          npx firebase-tools appdistribution:distribute android/app/build/outputs/apk/debug/app-debug.apk \
+            --app "$FIREBASE_APP_ID" \
+            --groups "testers" \
+            --release-notes "Automated CI/CD build triggered by commit ${{ github.sha }}"
+          rm -f service-account.json
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          FIREBASE_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
