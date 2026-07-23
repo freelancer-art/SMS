@@ -38,6 +38,8 @@ import {
   Send,
   ShieldCheck,
   Home,
+  BookOpen,
+  Sliders,
   Calendar,
   PhoneCall,
   FileText,
@@ -113,6 +115,9 @@ import {
   notifyNoticePublished,
 } from "../utils/notifications";
 import FacilityBookingManager from "./FacilityBookingManager";
+import SetupChecklist from "./SetupChecklist";
+import FeatureCatalogModal from "./FeatureCatalogModal";
+import HowToHelpDrawer from "./HowToHelpDrawer";
 
 interface MobileSimulatorProps {
   members: Member[];
@@ -906,6 +911,10 @@ export default function MobileSimulator({
   // 3. One-Click Ledger PDF / Print Statement Modal State
   const [showPrintLedgerModal, setShowPrintLedgerModal] = useState(false);
 
+  // In-App Help & Feature Catalog States
+  const [showHelpDrawer, setShowHelpDrawer] = useState(false);
+  const [showFeatureCatalogModal, setShowFeatureCatalogModal] = useState(false);
+
   const handleDownloadLedgerCSV = (flatNo: string) => {
     const flatInvoices = invoices.filter(
       (inv) => inv.SocietyId === activeSocietyId && inv.FlatNo === flatNo,
@@ -1065,6 +1074,9 @@ export default function MobileSimulator({
   const [tempTowers, setTempTowers] = useState<any[]>([]);
   const [tempFeatures, setTempFeatures] =
     useState<FeatureFlags>(activeFeatures);
+  const [settingsSubTab, setSettingsSubTab] = useState<
+    "general" | "features" | "billing"
+  >("general");
 
   // Financial Core: Billing Engine & Payment Gateway Settings States
   const [tempBillingMode, setTempBillingMode] = useState<
@@ -2889,6 +2901,35 @@ export default function MobileSimulator({
                     </div>
 
                     <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {/* Help & Knowledge Base Drawer Button */}
+                      <button
+                        onClick={() => setShowHelpDrawer(true)}
+                        className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all flex items-center gap-1 cursor-pointer ${
+                          isDark
+                            ? "bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/60 shadow-xs"
+                            : "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 shadow-3xs"
+                        }`}
+                        title="In-App Knowledge Base & How-To Guides"
+                      >
+                        <BookOpen className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                        <span className="hidden sm:inline">Help & Guides</span>
+                      </button>
+
+                      {/* Feature Catalog & Module Toggles Button (Admin) */}
+                      {userRole === "Admin" && (
+                        <button
+                          onClick={() => setShowFeatureCatalogModal(true)}
+                          className={`p-1.5 rounded-full transition-colors relative flex items-center justify-center min-w-[32px] min-h-[32px] cursor-pointer ${
+                            isDark
+                              ? "hover:bg-slate-800 text-purple-300"
+                              : "hover:bg-purple-50 text-purple-600"
+                          }`}
+                          title="Module Settings & Feature Catalog"
+                        >
+                          <Sliders className="w-4 h-4" />
+                        </button>
+                      )}
+
                       {/* Real-time Notification Bell */}
                       <button
                         onClick={() => setShowNotificationsModal(true)}
@@ -5779,12 +5820,34 @@ export default function MobileSimulator({
                               </div>
                             ))
                           ) : (
-                            <div className="text-center py-10 bg-white rounded-xl border border-dashed border-slate-250 text-slate-400">
-                              <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                              <p className="text-xs font-semibold">
-                                No complaints registered
-                              </p>
-                            </div>
+                            <SetupChecklist
+                              society={activeSocietyObj || {
+                                id: activeSocietyId,
+                                Name: societyName,
+                                PostalAddress: postalAddress,
+                                HasWings: hasWings,
+                                Wings: wingsList,
+                                BuildingType: buildingType as any,
+                                FeaturesEnabled: activeFeatures
+                              }}
+                              members={allMembers}
+                              onOpenSocietySettings={() => {
+                                setTempSocietyName(societyName);
+                                setTempHasWings(hasWings);
+                                setTempWingsList(wingsList.join(", "));
+                                setTempPostalAddress(postalAddress);
+                                setTempBuildingType(buildingType);
+                                setTempStructureType(activeStructureType);
+                                setTempTowers(JSON.parse(JSON.stringify(activeTowers)));
+                                setTempFeatures(activeFeatures);
+                                setShowSettingsModal(true);
+                              }}
+                              onOpenAddMember={() => setCurrentTab("members")}
+                              onOpenBillingRules={() => setShowBillingEngine(true)}
+                              onOpenSecuritySetup={() => setCurrentTab("staff")}
+                              onOpenFeatureCatalog={() => setShowFeatureCatalogModal(true)}
+                              theme={theme}
+                            />
                           )}
                         </div>
 
@@ -10623,9 +10686,14 @@ export default function MobileSimulator({
               {showSettingsModal && (
                 <div className="absolute inset-0 bg-white z-50 flex flex-col text-xs">
                   <div className="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                    <h3 className="font-bold text-slate-700">
-                      Society Settings
-                    </h3>
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-sm">
+                        Admin Society Settings
+                      </h3>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Configure society rules, active modules & financials
+                      </p>
+                    </div>
                     <button
                       onClick={() => {
                         setShowSettingsModal(false);
@@ -10636,498 +10704,562 @@ export default function MobileSimulator({
                     </button>
                   </div>
 
+                  {/* Settings Modal Tab Bar */}
+                  <div className="flex border-b border-slate-200 bg-slate-100/80 p-1 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsSubTab("general")}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        settingsSubTab === "general"
+                          ? "bg-white text-purple-700 shadow-3xs border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>🏢 General Info</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsSubTab("features")}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        settingsSubTab === "features"
+                          ? "bg-white text-purple-700 shadow-3xs border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>⚙️ Feature Config</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsSubTab("billing")}
+                      className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        settingsSubTab === "billing"
+                          ? "bg-white text-purple-700 shadow-3xs border border-slate-200"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      <span>💳 Billing & Gateways</span>
+                    </button>
+                  </div>
+
                   {/* EDIT ACTIVE SOCIETY FORM */}
                   <form
                     onSubmit={handleSaveSocietySettings}
                     className="flex-1 p-4 space-y-4 overflow-y-auto"
                   >
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-600 block">
-                        Society Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Greenwood Residency"
-                        value={tempSocietyName}
-                        onChange={(e) => setTempSocietyName(e.target.value)}
-                        className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-slate-800"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-600 block">
-                        Building / Property Type
-                      </label>
-                      <select
-                        value={tempBuildingType}
-                        onChange={(e) => setTempBuildingType(e.target.value)}
-                        className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-slate-800"
-                      >
-                        <option value="Housing Society">Housing Society</option>
-                        <option value="Apartment Complex">
-                          Apartment Complex
-                        </option>
-                        <option value="Gated Community">Gated Community</option>
-                        <option value="Residential Co-operative">
-                          Residential Co-operative
-                        </option>
-                        <option value="Commercial Complex">
-                          Commercial Complex
-                        </option>
-                        <option value="Others">Others</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-600 block">
-                        Postal Address
-                      </label>
-                      <textarea
-                        required
-                        placeholder="e.g. 123 Greenwood Road, Sector 5, Mumbai, MH - 400001"
-                        value={tempPostalAddress}
-                        onChange={(e) => setTempPostalAddress(e.target.value)}
-                        rows={2}
-                        className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium resize-none text-slate-800"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="font-bold text-slate-600 block">
-                        Structural Topology (Real-Time Layout)
-                      </label>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTempStructureType("standalone");
-                            setTempHasWings(false);
-                          }}
-                          className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
-                            tempStructureType === "standalone"
-                              ? "bg-purple-100 border-purple-400 text-purple-700"
-                              : "bg-white border-slate-200 text-slate-500"
-                          }`}
-                        >
-                          🏢 Standalone
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTempStructureType("wings");
-                            setTempHasWings(true);
-                          }}
-                          className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
-                            tempStructureType === "wings"
-                              ? "bg-purple-100 border-purple-400 text-purple-700"
-                              : "bg-white border-slate-200 text-slate-500"
-                          }`}
-                        >
-                          🧱 Winged Block
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTempStructureType("towers_wings");
-                            setTempHasWings(true);
-                            if (tempTowers.length === 0) {
-                              setTempTowers([
-                                { Name: "Tower 1", Wings: ["A", "B"] },
-                                { Name: "Tower 2", Wings: ["C", "D"] },
-                              ]);
-                            }
-                          }}
-                          className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
-                            tempStructureType === "towers_wings"
-                              ? "bg-purple-100 border-purple-400 text-purple-700"
-                              : "bg-white border-slate-200 text-slate-500"
-                          }`}
-                        >
-                          🏰 Towers & Wings
-                        </button>
-                      </div>
-                    </div>
-
-                    {tempStructureType === "wings" && (
-                      <div className="space-y-1.5 animate-fadeIn">
-                        <label className="font-bold text-slate-600 block">
-                          Define Wing Names
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. A, B, C, D"
-                          value={tempWingsList}
-                          onChange={(e) => setTempWingsList(e.target.value)}
-                          className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-slate-800"
-                        />
-                        <p className="text-[9px] text-slate-400">
-                          Separate wings using commas (e.g., A, B, C or Wing A,
-                          Wing B).
-                        </p>
-                      </div>
-                    )}
-
-                    {tempStructureType === "towers_wings" && (
-                      <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl animate-fadeIn">
-                        <div className="flex justify-between items-center border-b pb-1.5 border-slate-200">
-                          <span className="font-extrabold text-slate-700 text-[10px] uppercase tracking-wider flex items-center gap-1">
-                            🏢 Towers & Wings Setup
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextNum = tempTowers.length + 1;
-                              setTempTowers([
-                                ...tempTowers,
-                                { Name: `Tower ${nextNum}`, Wings: ["A", "B"] },
-                              ]);
-                            }}
-                            className="text-[9px] bg-purple-600 hover:bg-purple-700 text-white font-black px-2 py-1 rounded cursor-pointer transition-all"
-                          >
-                            ➕ Add Tower
-                          </button>
+                    {/* TAB 1: GENERAL & TOPOLOGY */}
+                    {settingsSubTab === "general" && (
+                      <div className="space-y-4 animate-fadeIn">
+                        <div className="space-y-1.5">
+                          <label className="font-bold text-slate-600 block">
+                            Society Name
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Greenwood Residency"
+                            value={tempSocietyName}
+                            onChange={(e) => setTempSocietyName(e.target.value)}
+                            className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-slate-800"
+                          />
                         </div>
 
-                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                          {tempTowers.map((tower, idx) => (
-                            <div
-                              key={idx}
-                              className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-3xs space-y-1.5 relative"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setTempTowers(
-                                    tempTowers.filter(
-                                      (_, tIdx) => tIdx !== idx,
-                                    ),
-                                  );
-                                }}
-                                className="absolute top-1.5 right-2 text-rose-500 hover:text-rose-700 font-bold text-sm"
-                              >
-                                ✕
-                              </button>
-
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-slate-500 text-[9px] shrink-0">
-                                  Tower Name:
-                                </span>
-                                <input
-                                  type="text"
-                                  value={tower.Name}
-                                  onChange={(e) => {
-                                    const updated = [...tempTowers];
-                                    updated[idx].Name = e.target.value;
-                                    setTempTowers(updated);
-                                  }}
-                                  className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 text-[10px]"
-                                />
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-slate-500 text-[9px] shrink-0">
-                                  Wings in Tower:
-                                </span>
-                                <input
-                                  type="text"
-                                  value={tower.Wings.join(", ")}
-                                  onChange={(e) => {
-                                    const updated = [...tempTowers];
-                                    updated[idx].Wings = e.target.value
-                                      .split(",")
-                                      .map((w) => w.trim())
-                                      .filter((w) => w !== "");
-                                    setTempTowers(updated);
-                                  }}
-                                  placeholder="e.g. A, B"
-                                  className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 text-[10px] flex-1"
-                                />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Feature Modules Management Section */}
-                    <div className="space-y-2 p-3 bg-purple-50/60 border border-purple-200 rounded-xl">
-                      <div className="flex justify-between items-center border-b pb-1.5 border-purple-200/80">
-                        <span className="font-extrabold text-purple-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
-                          ⚙️ Feature Modules Management
-                        </span>
-                        <span className="text-[8px] bg-purple-200/80 text-purple-800 font-bold px-1.5 py-0.5 rounded">
-                          Toggle Society Modules
-                        </span>
-                      </div>
-
-                      <p className="text-[9px] text-slate-500 font-medium leading-normal">
-                        Enable or disable optional software modules for this
-                        society. Disabled features will be hidden from residents
-                        and admin screens.
-                      </p>
-
-                      <div className="grid grid-cols-1 gap-1.5 text-[10px] pt-1">
-                        {[
-                          {
-                            id: "gatekeeper",
-                            label: "Gatekeeper & Visitor Scanner",
-                            icon: "🚪",
-                            desc: "Pre-approve guests, OTP check-in & gate logs",
-                          },
-                          {
-                            id: "waterMeters",
-                            label: "Water Meters & Tank Cleaning",
-                            icon: "💧",
-                            desc: "Flat water meter billing & tank maintenance",
-                          },
-                          {
-                            id: "tenantRegister",
-                            label: "Tenant Register & KYC",
-                            icon: "🔑",
-                            desc: "Lease agreement PDF & ID proof verification",
-                          },
-                          {
-                            id: "amenities",
-                            label: "Clubhouse & Amenity Booking",
-                            icon: "📅",
-                            desc: "Facility slot reservations & payment tracking",
-                          },
-                          {
-                            id: "assetAMC",
-                            label: "Asset & Lift AMC Register",
-                            icon: "🛠️",
-                            desc: "Equipment maintenance, service bills & expiry alerts",
-                          },
-                          {
-                            id: "parkingRegister",
-                            label: "Vehicle & Parking Register",
-                            icon: "🚗",
-                            desc: "Resident vehicle slots & guest parking passes",
-                          },
-                          {
-                            id: "documentVault",
-                            label: "Document Vault & Repository",
-                            icon: "📂",
-                            desc: "AGM minutes, audit statements & bylaws",
-                          },
-                        ].map((feat) => {
-                          const key = feat.id as keyof FeatureFlags;
-                          const isEnabled = tempFeatures[key] !== false;
-                          return (
-                            <label
-                              key={feat.id}
-                              className="flex items-center justify-between p-2 bg-white rounded-lg border border-purple-100 cursor-pointer hover:bg-purple-50/50 transition-colors shadow-3xs"
-                            >
-                              <div className="flex items-center gap-2 min-w-0 pr-2">
-                                <span className="text-sm shrink-0">
-                                  {feat.icon}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="font-extrabold text-slate-800 text-[9.5px] leading-tight">
-                                    {feat.label}
-                                  </p>
-                                  <p className="text-[8px] text-slate-400 font-semibold truncate mt-0.5">
-                                    {feat.desc}
-                                  </p>
-                                </div>
-                              </div>
-                              <input
-                                type="checkbox"
-                                checked={isEnabled}
-                                onChange={(e) => {
-                                  setTempFeatures({
-                                    ...tempFeatures,
-                                    [key]: e.target.checked,
-                                  });
-                                }}
-                                className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 cursor-pointer shrink-0"
-                              />
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* FINANCIAL CORE & BILLING ENGINE SETTINGS */}
-                    <div className="space-y-2 p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl">
-                      <div className="flex justify-between items-center border-b pb-1.5 border-indigo-200/80">
-                        <span className="font-extrabold text-indigo-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
-                          💳 Billing Rules & Fines Engine
-                        </span>
-                        <span className="text-[8px] bg-indigo-200/80 text-indigo-800 font-bold px-1.5 py-0.5 rounded uppercase">
-                          Financial Core
-                        </span>
-                      </div>
-
-                      <div className="space-y-2 pt-1">
-                        <div className="space-y-1">
-                          <label className="font-bold text-slate-700 text-[9.5px] block">
-                            Billing Calculation Mode
+                        <div className="space-y-1.5">
+                          <label className="font-bold text-slate-600 block">
+                            Building / Property Type
                           </label>
                           <select
-                            value={tempBillingMode}
-                            onChange={(e) =>
-                              setTempBillingMode(e.target.value as any)
-                            }
-                            className="w-full bg-white border border-slate-300 p-2 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500 text-[10px]"
+                            value={tempBuildingType}
+                            onChange={(e) => setTempBuildingType(e.target.value)}
+                            className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium text-slate-800"
                           >
-                            <option value="FlatRate">
-                              Mode 1: Flat Rate (Fixed per unit)
+                            <option value="Housing Society">Housing Society</option>
+                            <option value="Apartment Complex">
+                              Apartment Complex
                             </option>
-                            <option value="SqFtRate">
-                              Mode 2: SqFt Rate (AreaSqFt × RatePerSqFt)
+                            <option value="Gated Community">Gated Community</option>
+                            <option value="Residential Co-operative">
+                              Residential Co-operative
                             </option>
-                            <option value="Hybrid">
-                              Mode 3: Hybrid (Base Flat Rate + SqFt Component)
+                            <option value="Commercial Complex">
+                              Commercial Complex
                             </option>
+                            <option value="Others">Others</option>
                           </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <label className="font-semibold text-slate-600 block text-[9px]">
-                              Rate Per SqFt (₹)
-                            </label>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={tempRatePerSqFt}
-                              onChange={(e) =>
-                                setTempRatePerSqFt(Number(e.target.value))
-                              }
-                              className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono font-bold text-slate-800 text-[10px]"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="font-semibold text-slate-600 block text-[9px]">
-                              Default Base Rate (₹)
-                            </label>
-                            <input
-                              type="number"
-                              value={tempFlatRateAmount}
-                              onChange={(e) =>
-                                setTempFlatRateAmount(Number(e.target.value))
-                              }
-                              className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono font-bold text-slate-800 text-[10px]"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-indigo-150">
-                          <div className="space-y-1">
-                            <label className="font-semibold text-slate-600 block text-[9px]">
-                              Late Penalty Type
-                            </label>
-                            <select
-                              value={tempLateFeeType}
-                              onChange={(e) =>
-                                setTempLateFeeType(e.target.value as any)
-                              }
-                              className="w-full bg-white border border-slate-300 p-1.5 rounded-lg text-[10px] font-bold"
-                            >
-                              <option value="Fixed">
-                                Fixed Fine Amount (₹)
-                              </option>
-                              <option value="Interest">
-                                Simple Interest (%/mo)
-                              </option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <label className="font-semibold text-slate-600 block text-[9px]">
-                              Penalty Value (
-                              {tempLateFeeType === "Fixed" ? "₹" : "%"})
-                            </label>
-                            <input
-                              type="number"
-                              value={tempLateFeeValue}
-                              onChange={(e) =>
-                                setTempLateFeeValue(Number(e.target.value))
-                              }
-                              className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono font-bold text-slate-800 text-[10px]"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* PAYMENT GATEWAY PROVISIONING (ABSTRACTION LAYER) */}
-                    <div className="space-y-2 p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
-                      <div className="flex justify-between items-center border-b pb-1.5 border-emerald-200/80">
-                        <span className="font-extrabold text-emerald-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
-                          🌐 Payment Gateway Integration
-                        </span>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tempGatewayEnabled}
-                            onChange={(e) =>
-                              setTempGatewayEnabled(e.target.checked)
-                            }
-                            className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500"
+                        <div className="space-y-1.5">
+                          <label className="font-bold text-slate-600 block">
+                            Postal Address
+                          </label>
+                          <textarea
+                            required
+                            placeholder="e.g. 123 Greenwood Road, Sector 5, Mumbai, MH - 400001"
+                            value={tempPostalAddress}
+                            onChange={(e) => setTempPostalAddress(e.target.value)}
+                            rows={2}
+                            className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-medium resize-none text-slate-800"
                           />
-                          <span className="text-[9px] font-bold text-emerald-800">
-                            Enable Checkout
-                          </span>
-                        </label>
-                      </div>
+                        </div>
 
-                      {tempGatewayEnabled && (
-                        <div className="space-y-2 pt-1 animate-fadeIn">
-                          <div className="space-y-1">
-                            <label className="font-bold text-slate-700 text-[9.5px] block">
-                              Gateway Provider
-                            </label>
-                            <select
-                              value={tempGatewayProvider}
-                              onChange={(e) =>
-                                setTempGatewayProvider(e.target.value as any)
-                              }
-                              className="w-full bg-white border border-slate-300 p-2 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-emerald-500 text-[10px]"
+                        <div className="space-y-1.5">
+                          <label className="font-bold text-slate-600 block">
+                            Structural Topology (Real-Time Layout)
+                          </label>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTempStructureType("standalone");
+                                setTempHasWings(false);
+                              }}
+                              className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                                tempStructureType === "standalone"
+                                  ? "bg-purple-100 border-purple-400 text-purple-700"
+                                  : "bg-white border-slate-200 text-slate-500"
+                              }`}
                             >
-                              <option value="Razorpay">
-                                Razorpay Checkout SDK
-                              </option>
-                              <option value="Cashfree">
-                                Cashfree Payments Web SDK
-                              </option>
-                              <option value="Manual">
-                                Manual Bank Transfer / QR Code Only
-                              </option>
-                            </select>
+                              🏢 Standalone
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTempStructureType("wings");
+                                setTempHasWings(true);
+                              }}
+                              className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                                tempStructureType === "wings"
+                                  ? "bg-purple-100 border-purple-400 text-purple-700"
+                                  : "bg-white border-slate-200 text-slate-500"
+                              }`}
+                            >
+                              🧱 Winged Block
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTempStructureType("towers_wings");
+                                setTempHasWings(true);
+                                if (tempTowers.length === 0) {
+                                  setTempTowers([
+                                    { Name: "Tower 1", Wings: ["A", "B"] },
+                                    { Name: "Tower 2", Wings: ["C", "D"] },
+                                  ]);
+                                }
+                              }}
+                              className={`py-2 rounded-lg border text-center font-bold text-[10px] transition-all cursor-pointer ${
+                                tempStructureType === "towers_wings"
+                                  ? "bg-purple-100 border-purple-400 text-purple-700"
+                                  : "bg-white border-slate-200 text-slate-500"
+                              }`}
+                            >
+                              🏰 Towers & Wings
+                            </button>
+                          </div>
+                        </div>
+
+                        {tempStructureType === "wings" && (
+                          <div className="space-y-1.5 animate-fadeIn">
+                            <label className="font-bold text-slate-600 block">
+                              Define Wing Names
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. A, B, C, D"
+                              value={tempWingsList}
+                              onChange={(e) => setTempWingsList(e.target.value)}
+                              className="w-full bg-white border border-slate-300 p-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-slate-800"
+                            />
+                            <p className="text-[9px] text-slate-400">
+                              Separate wings using commas (e.g., A, B, C or Wing A,
+                              Wing B).
+                            </p>
+                          </div>
+                        )}
+
+                        {tempStructureType === "towers_wings" && (
+                          <div className="space-y-2 p-3 bg-slate-50 border border-slate-200 rounded-xl animate-fadeIn">
+                            <div className="flex justify-between items-center border-b pb-1.5 border-slate-200">
+                              <span className="font-extrabold text-slate-700 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                                🏢 Towers & Wings Setup
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextNum = tempTowers.length + 1;
+                                  setTempTowers([
+                                    ...tempTowers,
+                                    { Name: `Tower ${nextNum}`, Wings: ["A", "B"] },
+                                  ]);
+                                }}
+                                className="text-[9px] bg-purple-600 hover:bg-purple-700 text-white font-black px-2 py-1 rounded cursor-pointer transition-all"
+                              >
+                                ➕ Add Tower
+                              </button>
+                            </div>
+
+                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                              {tempTowers.map((tower, idx) => (
+                                <div
+                                  key={idx}
+                                  className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-3xs space-y-1.5 relative"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTempTowers(
+                                        tempTowers.filter(
+                                          (_, tIdx) => tIdx !== idx,
+                                        ),
+                                      );
+                                    }}
+                                    className="absolute top-1.5 right-2 text-rose-500 hover:text-rose-700 font-bold text-sm"
+                                  >
+                                    ✕
+                                  </button>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-500 text-[9px] shrink-0">
+                                      Tower Name:
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={tower.Name}
+                                      onChange={(e) => {
+                                        const updated = [...tempTowers];
+                                        updated[idx].Name = e.target.value;
+                                        setTempTowers(updated);
+                                      }}
+                                      className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 text-[10px]"
+                                    />
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-500 text-[9px] shrink-0">
+                                      Wings in Tower:
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={tower.Wings.join(", ")}
+                                      onChange={(e) => {
+                                        const updated = [...tempTowers];
+                                        updated[idx].Wings = e.target.value
+                                          .split(",")
+                                          .map((w) => w.trim())
+                                          .filter((w) => w !== "");
+                                        setTempTowers(updated);
+                                      }}
+                                      placeholder="e.g. A, B"
+                                      className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-purple-500 text-[10px] flex-1"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TAB 2: FEATURE CONFIGURATION */}
+                    {settingsSubTab === "features" && (
+                      <div className="space-y-3 animate-fadeIn">
+                        <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl space-y-1">
+                          <h4 className="font-extrabold text-purple-900 text-xs flex items-center gap-1.5">
+                            <Sliders className="w-4 h-4 text-purple-600" />
+                            <span>Feature Activation & Module Control</span>
+                          </h4>
+                          <p className="text-[10px] text-purple-700 leading-normal font-medium">
+                            Enable or disable optional society modules. Toggling features on/off dynamically updates navigation tabs and permissions across all resident & admin views in real time.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          {[
+                            {
+                              id: "gatekeeper",
+                              label: "Gatekeeper & Visitor Scanner",
+                              icon: "🚪",
+                              desc: "Pre-approve guests, OTP check-in & gatekeeper entry logs",
+                            },
+                            {
+                              id: "waterMeters",
+                              label: "Water Meters & Tank Maintenance",
+                              icon: "💧",
+                              desc: "Individual flat water meter readings & tank cleaning schedule",
+                            },
+                            {
+                              id: "tenantRegister",
+                              label: "Tenant Register & KYC",
+                              icon: "🔑",
+                              desc: "Lease agreement uploads, ID verification & police NOC tracking",
+                            },
+                            {
+                              id: "amenities",
+                              label: "Clubhouse & Amenity Booking",
+                              icon: "📅",
+                              desc: "Facility slot reservations, party hall bookings & payment logs",
+                            },
+                            {
+                              id: "assetAMC",
+                              label: "Asset & Lift AMC Register",
+                              icon: "🛠️",
+                              desc: "Equipment maintenance contracts, service bills & expiry alerts",
+                            },
+                            {
+                              id: "parkingRegister",
+                              label: "Vehicle & Parking Slot Register",
+                              icon: "🚗",
+                              desc: "Resident vehicle slots, stickers & guest parking passes",
+                            },
+                            {
+                              id: "documentVault",
+                              label: "Document Vault & Repository",
+                              icon: "📂",
+                              desc: "AGM minutes, audit statements, legal deeds & bylaws",
+                            },
+                          ].map((feat) => {
+                            const key = feat.id as keyof FeatureFlags;
+                            const isEnabled = tempFeatures[key] !== false;
+                            return (
+                              <div
+                                key={feat.id}
+                                className={`p-3 rounded-xl border transition-all ${
+                                  isEnabled
+                                    ? "bg-purple-50/40 border-purple-200 shadow-3xs"
+                                    : "bg-slate-50 border-slate-200 opacity-75"
+                                } flex items-center justify-between gap-3`}
+                              >
+                                <div className="flex items-start gap-2.5 min-w-0">
+                                  <span className="text-lg shrink-0 mt-0.5">
+                                    {feat.icon}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <h5 className="font-extrabold text-slate-800 text-xs">
+                                        {feat.label}
+                                      </h5>
+                                      <span
+                                        className={`text-[8px] font-black px-1.5 py-0.5 rounded ${
+                                          isEnabled
+                                            ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                            : "bg-slate-200 text-slate-600 border border-slate-300"
+                                        }`}
+                                      >
+                                        {isEnabled ? "ACTIVE" : "DISABLED"}
+                                      </span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 font-medium leading-tight mt-0.5">
+                                      {feat.desc}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isEnabled}
+                                    onChange={(e) => {
+                                      setTempFeatures({
+                                        ...tempFeatures,
+                                        [key]: e.target.checked,
+                                      });
+                                    }}
+                                    className="sr-only peer"
+                                  />
+                                  <div className="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 3: BILLING & PAYMENT GATEWAYS */}
+                    {settingsSubTab === "billing" && (
+                      <div className="space-y-4 animate-fadeIn">
+                        {/* FINANCIAL CORE & BILLING ENGINE SETTINGS */}
+                        <div className="space-y-2 p-3 bg-indigo-50/60 border border-indigo-200 rounded-xl">
+                          <div className="flex justify-between items-center border-b pb-1.5 border-indigo-200/80">
+                            <span className="font-extrabold text-indigo-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                              💳 Billing Rules & Fines Engine
+                            </span>
+                            <span className="text-[8px] bg-indigo-200/80 text-indigo-800 font-bold px-1.5 py-0.5 rounded uppercase">
+                              Financial Core
+                            </span>
                           </div>
 
-                          {tempGatewayProvider !== "Manual" && (
+                          <div className="space-y-2 pt-1">
                             <div className="space-y-1">
-                              <label className="font-semibold text-slate-600 block text-[9px]">
-                                Production/Sandbox API Key
+                              <label className="font-bold text-slate-700 text-[9.5px] block">
+                                Billing Calculation Mode
                               </label>
-                              <input
-                                type="text"
-                                placeholder={
-                                  tempGatewayProvider === "Razorpay"
-                                    ? "rzp_live_xxxxxxxx"
-                                    : "cf_live_xxxxxxxx"
-                                }
-                                value={tempGatewayApiKey}
+                              <select
+                                value={tempBillingMode}
                                 onChange={(e) =>
-                                  setTempGatewayApiKey(e.target.value)
+                                  setTempBillingMode(e.target.value as any)
                                 }
-                                className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono text-[10px] text-slate-800"
+                                className="w-full bg-white border border-slate-300 p-2 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500 text-[10px]"
+                              >
+                                <option value="FlatRate">
+                                  Mode 1: Flat Rate (Fixed per unit)
+                                </option>
+                                <option value="SqFtRate">
+                                  Mode 2: SqFt Rate (AreaSqFt × RatePerSqFt)
+                                </option>
+                                <option value="Hybrid">
+                                  Mode 3: Hybrid (Base Flat Rate + SqFt Component)
+                                </option>
+                              </select>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="space-y-1">
+                                <label className="font-semibold text-slate-600 block text-[9px]">
+                                  Rate Per SqFt (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  value={tempRatePerSqFt}
+                                  onChange={(e) =>
+                                    setTempRatePerSqFt(Number(e.target.value))
+                                  }
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono font-bold text-slate-800 text-[10px]"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="font-semibold text-slate-600 block text-[9px]">
+                                  Default Base Rate (₹)
+                                </label>
+                                <input
+                                  type="number"
+                                  value={tempFlatRateAmount}
+                                  onChange={(e) =>
+                                    setTempFlatRateAmount(Number(e.target.value))
+                                  }
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono font-bold text-slate-800 text-[10px]"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-indigo-150">
+                              <div className="space-y-1">
+                                <label className="font-semibold text-slate-600 block text-[9px]">
+                                  Late Penalty Type
+                                </label>
+                                <select
+                                  value={tempLateFeeType}
+                                  onChange={(e) =>
+                                    setTempLateFeeType(e.target.value as any)
+                                  }
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded-lg text-[10px] font-bold"
+                                >
+                                  <option value="Fixed">
+                                    Fixed Fine Amount (₹)
+                                  </option>
+                                  <option value="Interest">
+                                    Simple Interest (%/mo)
+                                  </option>
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="font-semibold text-slate-600 block text-[9px]">
+                                  Penalty Value (
+                                  {tempLateFeeType === "Fixed" ? "₹" : "%"})
+                                </label>
+                                <input
+                                  type="number"
+                                  value={tempLateFeeValue}
+                                  onChange={(e) =>
+                                    setTempLateFeeValue(Number(e.target.value))
+                                  }
+                                  className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono font-bold text-slate-800 text-[10px]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* PAYMENT GATEWAY PROVISIONING (ABSTRACTION LAYER) */}
+                        <div className="space-y-2 p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+                          <div className="flex justify-between items-center border-b pb-1.5 border-emerald-200/80">
+                            <span className="font-extrabold text-emerald-900 text-[10px] uppercase tracking-wider flex items-center gap-1">
+                              🌐 Payment Gateway Integration
+                            </span>
+                            <label className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={tempGatewayEnabled}
+                                onChange={(e) =>
+                                  setTempGatewayEnabled(e.target.checked)
+                                }
+                                className="w-3.5 h-3.5 text-emerald-600 rounded focus:ring-emerald-500"
                               />
+                              <span className="text-[9px] font-bold text-emerald-800">
+                                Enable Checkout
+                              </span>
+                            </label>
+                          </div>
+
+                          {tempGatewayEnabled && (
+                            <div className="space-y-2 pt-1 animate-fadeIn">
+                              <div className="space-y-1">
+                                <label className="font-bold text-slate-700 text-[9.5px] block">
+                                  Gateway Provider
+                                </label>
+                                <select
+                                  value={tempGatewayProvider}
+                                  onChange={(e) =>
+                                    setTempGatewayProvider(e.target.value as any)
+                                  }
+                                  className="w-full bg-white border border-slate-300 p-2 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-emerald-500 text-[10px]"
+                                >
+                                  <option value="Razorpay">
+                                    Razorpay Checkout SDK
+                                  </option>
+                                  <option value="Cashfree">
+                                    Cashfree Payments Web SDK
+                                  </option>
+                                  <option value="Manual">
+                                    Manual Bank Transfer / QR Code Only
+                                  </option>
+                                </select>
+                              </div>
+
+                              {tempGatewayProvider !== "Manual" && (
+                                <div className="space-y-1">
+                                  <label className="font-semibold text-slate-600 block text-[9px]">
+                                    Production/Sandbox API Key
+                                  </label>
+                                  <input
+                                    type="text"
+                                    placeholder={
+                                      tempGatewayProvider === "Razorpay"
+                                        ? "rzp_live_xxxxxxxx"
+                                        : "cf_live_xxxxxxxx"
+                                    }
+                                    value={tempGatewayApiKey}
+                                    onChange={(e) =>
+                                      setTempGatewayApiKey(e.target.value)
+                                    }
+                                    className="w-full bg-white border border-slate-300 p-1.5 rounded-lg font-mono text-[10px] text-slate-800"
+                                  />
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
 
                     <button
                       type="submit"
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-all"
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white py-2.5 rounded-xl font-bold mt-4 shadow cursor-pointer transition-all flex items-center justify-center gap-1.5"
                       id="save-society-config-btn"
                     >
-                      Save Society Configurations
+                      <Save className="w-4 h-4" />
+                      <span>Save Society Configurations</span>
                     </button>
                   </form>
                 </div>
@@ -14264,6 +14396,45 @@ export default function MobileSimulator({
                     </div>
                   </div>
                 </div>
+              )}
+
+              {/* How-To & Help Knowledge Base Drawer */}
+              <HowToHelpDrawer
+                isOpen={showHelpDrawer}
+                onClose={() => setShowHelpDrawer(false)}
+                theme={theme}
+              />
+
+              {/* Feature Catalog & Module Settings Modal */}
+              {showFeatureCatalogModal && (
+                <FeatureCatalogModal
+                  society={activeSocietyObj || {
+                    id: activeSocietyId,
+                    Name: societyName,
+                    PostalAddress: postalAddress,
+                    HasWings: hasWings,
+                    Wings: wingsList,
+                    BuildingType: buildingType as any,
+                    FeaturesEnabled: activeFeatures
+                  }}
+                  onUpdateFeatures={(nextFeatures) => {
+                    if (onUpdateSocietySettings) {
+                      onUpdateSocietySettings(
+                        societyName,
+                        hasWings,
+                        wingsList,
+                        postalAddress,
+                        buildingType,
+                        activeStructureType,
+                        activeTowers,
+                        nextFeatures
+                      );
+                    }
+                    triggerToast("Module Settings updated successfully!");
+                  }}
+                  onClose={() => setShowFeatureCatalogModal(false)}
+                  theme={theme}
+                />
               )}
             </div>
           </div>

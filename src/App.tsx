@@ -2223,28 +2223,14 @@ export default function App() {
       SocietyId: newId,
       FlatNo: "101",
       Wing: wingsEnabled && wings.length > 0 ? wings[0] : "",
-      OwnerName: "Default Owner",
+      OwnerName: "Society Administrator",
       ContactNo: "+91 99999 88888",
-      Email: "owner.101@example.com",
-      Balance: 1500,
+      Email: "admin@society.org",
+      Balance: 0,
       Status: "Owner"
     };
     const nextMembers = [...members, starterMember];
     updateMembersState(nextMembers);
-
-    // Seed a welcome notice for the new society
-    const starterNotice: Notice = {
-      id: `N-${newId}-welcome`,
-      SocietyId: newId,
-      Date: new Date().toISOString().split('T')[0],
-      Title: `Welcome to ${name}!`,
-      Category: "General",
-      Content: `Welcome to the newly set up digital management portal for ${name}. You can configure apartments, record payments, and approve expenses in real-time.`,
-      PostedBy: "System Administrator"
-    };
-    const nextNotices = [starterNotice, ...notices];
-    setNotices(nextNotices);
-    localStorage.setItem('society_notices', JSON.stringify(nextNotices));
 
     setActiveSocietyId(newId);
     localStorage.setItem('active_society_id', newId);
@@ -2278,17 +2264,6 @@ export default function App() {
         },
         body: JSON.stringify(starterMember)
       }).catch(err => console.warn('Failed to seed default member in Supabase:', err));
-
-      // Register welcome notice to Supabase
-      fetch(`${supabaseUrl}/rest/v1/Notices`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseAnonKey,
-          'Authorization': `Bearer ${supabaseAnonKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(starterNotice)
-      }).catch(err => console.warn('Failed to seed welcome notice in Supabase:', err));
     }
   };
 
