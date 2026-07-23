@@ -1,4 +1,4 @@
-import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote, Staff, StaffAttendance, Vendor } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken } from '../types';
 
 export const INITIAL_MEMBERS: Member[] = [
   {
@@ -1427,6 +1427,50 @@ export const INITIAL_VENDORS: Vendor[] = [
     Status: 'Active',
     Rating: 4.5,
     Notes: 'Quarterly UV disinfection & mechanical scrubbing of overhead & underground tanks.'
+  }
+];
+
+export const INITIAL_USER_CONSENTS: UserConsent[] = [
+  {
+    id: 'UC-1001',
+    UserId: 'Auth-gw-amit-sharma',
+    SocietyId: 'greenwood',
+    ConsentedAt: '2026-07-22T08:00:00Z',
+    PolicyVersion: 'v1.0-2026',
+    IPAddress: '127.0.0.1',
+    UserRole: 'Admin'
+  },
+  {
+    id: 'UC-1002',
+    UserId: 'amit080578@gmail.com',
+    SocietyId: 'greenwood',
+    ConsentedAt: '2026-07-22T08:05:00Z',
+    PolicyVersion: 'v1.0-2026',
+    IPAddress: '127.0.0.1',
+    UserRole: 'Admin'
+  }
+];
+
+export const INITIAL_PUSH_TOKENS: PushToken[] = [
+  {
+    id: 'TOK-101-1',
+    UserId: 'Auth-gw-amit-sharma',
+    SocietyId: 'greenwood',
+    FlatNo: '101',
+    ExpoPushToken: 'ExponentPushToken[SimulatedToken_Amit_Flat101]',
+    DeviceOS: 'android',
+    CreatedAt: '2026-07-22T08:00:00Z',
+    LastUsedAt: '2026-07-23T00:00:00Z'
+  },
+  {
+    id: 'TOK-102-1',
+    UserId: 'M-greenwood-102',
+    SocietyId: 'greenwood',
+    FlatNo: '102',
+    ExpoPushToken: 'ExponentPushToken[SimulatedToken_Priya_Flat102]',
+    DeviceOS: 'ios',
+    CreatedAt: '2026-07-21T10:00:00Z',
+    LastUsedAt: '2026-07-22T12:00:00Z'
   }
 ];
 

@@ -399,4 +399,26 @@ export interface PollVote {
   VotedAt?: string;
 }
 
+export interface UserConsent {
+  id: string;
+  UserId: string;
+  SocietyId: string;
+  ConsentedAt: string;
+  PolicyVersion: string;
+  IPAddress?: string;
+  UserRole?: string;
+}
+
+export interface PushToken {
+  id: string;
+  UserId: string;
+  SocietyId: string;
+  FlatNo: string;
+  ExpoPushToken: string;
+  DeviceOS: 'android' | 'ios' | 'web';
+  CreatedAt?: string;
+  LastUsedAt?: string;
+}
+
+
 

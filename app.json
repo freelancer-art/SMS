@@ -1,0 +1,73 @@
+{
+  "expo": {
+    "name": "SocietyConnect - Housing Society Management",
+    "slug": "society-connect",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "icon": "./public/icon-512.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./public/icon-512.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.housing.societyconnect",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SocietyConnect needs camera access to scan visitor QR gatepasses and upload maintenance bill receipts.",
+        "NSPhotoLibraryUsageDescription": "SocietyConnect needs photo gallery access to upload society documents and resident tenant agreements.",
+        "NSMicrophoneUsageDescription": "SocietyConnect uses microphone for voice complaints and gatekeeper intercom."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./public/icon-512.png",
+        "backgroundColor": "#0f172a"
+      },
+      "package": "com.housing.societyconnect",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
+      "googleServicesFile": "./google-services.json"
+    },
+    "web": {
+      "favicon": "./public/icon-512.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./public/icon-512.png",
+          "color": "#059669",
+          "sounds": ["default"]
+        }
+      ],
+      [
+        "expo-updates",
+        {
+          "username": "societyconnect-admin"
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/f8d92a10-432a-4b10-8910-societyconnect",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f8d92a10-432a-4b10-8910-societyconnect"
+      }
+    }
+  }
+}

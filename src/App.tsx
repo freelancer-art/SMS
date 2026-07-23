@@ -15,7 +15,7 @@ import {
   Key,
   Check
 } from 'lucide-react';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor } from './types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken } from './types';
 import { 
   MULTI_TENANT_MEMBERS, 
   MULTI_TENANT_PAYMENTS, 
@@ -38,9 +38,12 @@ import {
   INITIAL_POLL_VOTES,
   INITIAL_STAFF,
   INITIAL_STAFF_ATTENDANCE,
-  INITIAL_VENDORS
+  INITIAL_VENDORS,
+  INITIAL_USER_CONSENTS,
+  INITIAL_PUSH_TOKENS
 } from './data/mockData';
 import { hashPassword, generateSalt, generateVisitorAccessToken } from './utils/security';
+import { crashReporter } from './utils/logger';
 import MobileSimulator from './components/MobileSimulator';
 import ExpoDeveloperHub from './components/ExpoDeveloperHub';
 import OnboardingWizard from './components/OnboardingWizard';
@@ -188,7 +191,24 @@ export default function App() {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [staffAttendanceList, setStaffAttendanceList] = useState<StaffAttendance[]>([]);
   const [vendorList, setVendorList] = useState<Vendor[]>([]);
+  const [userConsents, setUserConsents] = useState<UserConsent[]>([]);
+  const [pushTokens, setPushTokens] = useState<PushToken[]>([]);
   const [lastSynced, setLastSynced] = useState<string>(() => localStorage.getItem('society_last_synced') || '');
+
+  const updateUserConsentsState = (list: UserConsent[]) => {
+    setUserConsents(list);
+    localStorage.setItem('society_user_consents', JSON.stringify(list));
+  };
+
+  const updatePushTokensState = (list: PushToken[]) => {
+    setPushTokens(list);
+    localStorage.setItem('society_push_tokens', JSON.stringify(list));
+  };
+
+  // Initialize production crash logger
+  useEffect(() => {
+    crashReporter.init(activeSocietyId);
+  }, [activeSocietyId]);
 
   // Init Data from LocalStorage or Fallbacks
   useEffect(() => {
@@ -287,6 +307,8 @@ export default function App() {
     const localStaff = localStorage.getItem('society_staff');
     const localStaffAttendance = localStorage.getItem('society_staff_attendance');
     const localVendors = localStorage.getItem('society_vendors');
+    const localConsents = localStorage.getItem('society_user_consents');
+    const localTokens = localStorage.getItem('society_push_tokens');
     
     const parsedRoles = getSafeList(localRoles, MULTI_TENANT_ROLES);
     let parsedAuths = getSafeList(localUserAuths, MULTI_TENANT_USER_AUTHS);
@@ -317,6 +339,8 @@ export default function App() {
     const parsedStaff = getSafeList(localStaff, INITIAL_STAFF);
     const parsedStaffAttendance = getSafeList(localStaffAttendance, INITIAL_STAFF_ATTENDANCE);
     const parsedVendors = getSafeList(localVendors, INITIAL_VENDORS);
+    const parsedConsents = getSafeList(localConsents, INITIAL_USER_CONSENTS);
+    const parsedPushTokens = getSafeList(localTokens, INITIAL_PUSH_TOKENS);
 
     setEmergencyContacts(parsedEmergencyContacts);
     setTenants(parsedTenants);
@@ -330,6 +354,8 @@ export default function App() {
     setStaffList(parsedStaff);
     setStaffAttendanceList(parsedStaffAttendance);
     setVendorList(parsedVendors);
+    setUserConsents(parsedConsents);
+    setPushTokens(parsedPushTokens);
 
     localStorage.setItem('society_emergency_contacts', JSON.stringify(parsedEmergencyContacts));
     localStorage.setItem('society_tenants', JSON.stringify(parsedTenants));
@@ -776,6 +802,9 @@ export default function App() {
       }));
       await clearAndInsert('PollVotes', formattedPollVotes, 'id');
 
+      // Seed UserConsents (DPDP Act 2023)
+      await clearAndInsert('UserConsents', INITIAL_USER_CONSENTS, 'id');
+
       // Seed settings (for backwards compatibility)
       const settingsRows = [
         { Key: 'societyName', Value: societyName },
@@ -1065,7 +1094,7 @@ export default function App() {
       }
 
       // 9. Fetch ComplaintReplies
-      const complaintRepliesData = await safeFetchJson('ComplaintReplies');
+      const complaintRepliesData = await safeFetchJson('ComplaintReplies', 'id,ComplaintId,SocietyId,SenderName,SenderRole,Message,Timestamp');
       if (Array.isArray(complaintRepliesData)) {
         const formatted: ComplaintReply[] = complaintRepliesData
           .filter(r => r && r.id)
@@ -1082,7 +1111,7 @@ export default function App() {
       }
 
       // 10. Fetch Roles
-      const rolesData = await safeFetchJson('Roles');
+      const rolesData = await safeFetchJson('Roles', 'id,RoleName,SocietyId,Description');
       if (Array.isArray(rolesData) && rolesData.length > 0) {
         const formatted: Role[] = rolesData.map(r => ({
           id: String(r.id),
@@ -1094,7 +1123,7 @@ export default function App() {
       }
 
       // 11. Fetch UserAuth
-      const userAuthData = await safeFetchJson('UserAuth');
+      const userAuthData = await safeFetchJson('UserAuth', 'id,EmailOrPhone,PasswordHash,Salt,RoleId,SocietyId,Status');
       if (Array.isArray(userAuthData) && userAuthData.length > 0) {
         const formatted: UserAuth[] = userAuthData.map(ua => ({
           id: String(ua.id),
@@ -1109,7 +1138,7 @@ export default function App() {
       }
 
       // 12. Fetch EmergencyContacts (Tier 1)
-      const ecData = await safeFetchJson('EmergencyContacts');
+      const ecData = await safeFetchJson('EmergencyContacts', 'id,SocietyId,Name,Category,Phone,RoleOrTitle,IsImportant');
       if (Array.isArray(ecData)) {
         const formatted: EmergencyContact[] = ecData.map(ec => ({
           id: String(ec.id),
@@ -1124,7 +1153,7 @@ export default function App() {
       }
 
       // 13. Fetch Tenants (Tier 1)
-      const tenantsData = await safeFetchJson('Tenants');
+      const tenantsData = await safeFetchJson('Tenants', 'id,SocietyId,FlatNo,TenantName,ContactNo,Email,MoveInDate,MoveOutDate,AgreementDocUrl,IdProofDocUrl,KycStatus,Remarks');
       if (Array.isArray(tenantsData)) {
         const formatted: Tenant[] = tenantsData.map(t => ({
           id: String(t.id),
@@ -1144,7 +1173,7 @@ export default function App() {
       }
 
       // 14. Fetch Vehicles (Tier 1)
-      const vehiclesData = await safeFetchJson('Vehicles');
+      const vehiclesData = await safeFetchJson('Vehicles', 'id,SocietyId,FlatNo,OwnerName,VehicleNo,VehicleType,ParkingSlotNo,StickerIssued');
       if (Array.isArray(vehiclesData)) {
         const formatted: Vehicle[] = vehiclesData.map(v => ({
           id: String(v.id),
@@ -1160,7 +1189,7 @@ export default function App() {
       }
 
       // 15. Fetch GuestParking (Tier 1)
-      const gpData = await safeFetchJson('GuestParking');
+      const gpData = await safeFetchJson('GuestParking', 'id,SocietyId,FlatNo,GuestName,VehicleNo,VehicleType,AssignedSlot,ValidFrom,ValidUntil,Status');
       if (Array.isArray(gpData)) {
         const formatted: GuestParking[] = gpData.map(gp => ({
           id: String(gp.id),
@@ -1178,7 +1207,7 @@ export default function App() {
       }
 
       // 16. Fetch SocietyDocuments (Tier 2)
-      const docsData = await safeFetchJson('SocietyDocuments');
+      const docsData = await safeFetchJson('SocietyDocuments', 'id,SocietyId,Title,Category,DocumentUrl,IsPublic,UploadedBy,UploadedAt,FileSize');
       if (Array.isArray(docsData)) {
         const formatted: SocietyDocument[] = docsData.map(d => ({
           id: String(d.id),
@@ -1195,7 +1224,7 @@ export default function App() {
       }
 
       // 17. Fetch AssetAMCs (Tier 2)
-      const amcData = await safeFetchJson('AssetAMCs');
+      const amcData = await safeFetchJson('AssetAMCs', 'id,SocietyId,AssetName,AssetType,VendorName,VendorContact,ContractStartDate,ContractExpiryDate,LastServicedDate,NextServicedDate,ServiceStatus,StatusNote,ReportUrl');
       if (Array.isArray(amcData)) {
         const formatted: AssetAMC[] = amcData.map(a => ({
           id: String(a.id),
@@ -1216,7 +1245,7 @@ export default function App() {
       }
 
       // 18. Fetch WaterMeters (Tier 2)
-      const wmData = await safeFetchJson('WaterMeters');
+      const wmData = await safeFetchJson('WaterMeters', 'id,SocietyId,FlatNo,ReadingMonth,PreviousReading,CurrentReading,UnitsConsumed,RecordedBy,RecordedAt,Status');
       if (Array.isArray(wmData)) {
         const formatted: WaterMeter[] = wmData.map(w => ({
           id: String(w.id),
@@ -1234,7 +1263,7 @@ export default function App() {
       }
 
       // 19. Fetch Polls & Resolutions
-      const pollsData = await safeFetchJson('Polls');
+      const pollsData = await safeFetchJson('Polls', 'id,SocietyId,Title,Description,Category,StartDate,EndDate,Status,CreatedBy');
       if (Array.isArray(pollsData) && pollsData.length > 0) {
         const formatted: Poll[] = pollsData.map(p => ({
           id: String(p.id),
@@ -1251,7 +1280,7 @@ export default function App() {
       }
 
       // 20. Fetch PollVotes
-      const pollVotesData = await safeFetchJson('PollVotes');
+      const pollVotesData = await safeFetchJson('PollVotes', 'id,PollId,SocietyId,FlatNo,VotedBy,Vote,Timestamp,VotedAt');
       if (Array.isArray(pollVotesData)) {
         const formatted: PollVote[] = pollVotesData.map(v => ({
           id: String(v.id),
@@ -1263,6 +1292,37 @@ export default function App() {
           Timestamp: v.Timestamp || v.VotedAt || new Date().toISOString()
         }));
         updatePollVotesState(formatted);
+      }
+
+      // 21. Fetch UserConsents (DPDP Act 2023)
+      const userConsentsData = await safeFetchJson('UserConsents', 'id,UserId,SocietyId,ConsentedAt,PolicyVersion,IPAddress,UserRole');
+      if (Array.isArray(userConsentsData)) {
+        const formatted: UserConsent[] = userConsentsData.map(uc => ({
+          id: String(uc.id),
+          UserId: String(uc.UserId || ''),
+          SocietyId: uc.SocietyId || 'greenwood',
+          ConsentedAt: uc.ConsentedAt || '',
+          PolicyVersion: uc.PolicyVersion || 'v1.0-2026',
+          IPAddress: uc.IPAddress || '127.0.0.1',
+          UserRole: uc.UserRole || 'Member'
+        }));
+        updateUserConsentsState(formatted);
+      }
+
+      // 22. Fetch PushTokens
+      const pushTokensData = await safeFetchJson('PushTokens', 'id,UserId,SocietyId,FlatNo,ExpoPushToken,DeviceOS,CreatedAt,LastUsedAt');
+      if (Array.isArray(pushTokensData)) {
+        const formatted: PushToken[] = pushTokensData.map(pt => ({
+          id: String(pt.id),
+          UserId: String(pt.UserId || ''),
+          SocietyId: pt.SocietyId || 'greenwood',
+          FlatNo: String(pt.FlatNo || ''),
+          ExpoPushToken: pt.ExpoPushToken || '',
+          DeviceOS: pt.DeviceOS || 'android',
+          CreatedAt: pt.CreatedAt || new Date().toISOString(),
+          LastUsedAt: pt.LastUsedAt || new Date().toISOString()
+        }));
+        updatePushTokensState(formatted);
       }
 
       const timeString = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
@@ -2659,6 +2719,69 @@ export default function App() {
   const filteredAssetAMCs = assetAMCs.filter(a => a.SocietyId === activeSocietyId);
   const filteredWaterMeters = waterMeters.filter(w => w.SocietyId === activeSocietyId);
 
+  const handleAddUserConsent = async (consent: Omit<UserConsent, 'id'>) => {
+    const newConsent: UserConsent = {
+      ...consent,
+      id: `UC-${Date.now()}`,
+      SocietyId: activeSocietyId,
+      ConsentedAt: consent.ConsentedAt || new Date().toISOString(),
+      PolicyVersion: consent.PolicyVersion || 'v1.0-2026',
+      IPAddress: consent.IPAddress || '127.0.0.1',
+      UserRole: consent.UserRole || 'Member'
+    };
+    const updated = [newConsent, ...userConsents];
+    updateUserConsentsState(updated);
+    handleAddAuditLog('User Consent Logged (DPDP 2023)', `User ${consent.UserId} accepted Privacy Policy & Terms of Service under DPDP Act 2023`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/UserConsents`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(newConsent)
+        });
+      } catch (err) {
+        console.error('Failed to post UserConsent row to Supabase:', err);
+      }
+    }
+  };
+
+  const handleAddPushToken = async (token: Omit<PushToken, 'id'>) => {
+    const newToken: PushToken = {
+      ...token,
+      id: `TOK-${Date.now()}`,
+      SocietyId: activeSocietyId,
+      CreatedAt: token.CreatedAt || new Date().toISOString(),
+      LastUsedAt: new Date().toISOString()
+    };
+    // Upsert local state: replace existing token for same flat/device if exists
+    const filtered = pushTokens.filter(t => !(t.UserId === token.UserId && t.FlatNo === token.FlatNo));
+    const updated = [newToken, ...filtered];
+    updatePushTokensState(updated);
+    handleAddAuditLog('Push Token Registered', `Device token registered for Flat ${token.FlatNo} (${token.DeviceOS})`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        await fetch(`${supabaseUrl}/rest/v1/PushTokens`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseAnonKey,
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(newToken)
+        });
+      } catch (err) {
+        console.error('Failed to post PushToken row to Supabase:', err);
+      }
+    }
+  };
+
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans overflow-hidden transition-colors duration-300`}>
       {/* Immersive Onboarding Setup Wizard Overlay */}
@@ -2917,6 +3040,10 @@ export default function App() {
             wingsList={wingsList}
             postalAddress={postalAddress}
             buildingType={buildingType}
+            userConsents={userConsents}
+            onAddUserConsent={handleAddUserConsent}
+            pushTokens={pushTokens}
+            onAddPushToken={handleAddPushToken}
             onUpdateSocietySettings={handleUpdateSocietySettings}
             onSaveOrUpdateMember={handleSaveOrUpdateMember}
             onAddDues={handleAddDues}

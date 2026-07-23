@@ -2711,11 +2711,42 @@ class BackupDatabase {
     { id: "N-101", Date: "2026-07-18", Title: "Annual General Body Meeting (AGM) Agenda", Category: "Meeting", Content: "AGM on Sunday July 26th in Clubhouse to discuss maintenance.", AttachmentUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", PostedBy: "Management Committee" },
     { id: "N-102", Date: "2026-07-12", Title: "Water Tank Cleaning Schedule", Category: "Maintenance", Content: "Water cut on Monday 20th July from 10am to 4pm.", AttachmentUrl: "", PostedBy: "Facility Manager" }
   ];
+
+  userConsents = [
+    { id: "UC-1001", UserId: "Auth-gw-amit-sharma", SocietyId: "greenwood", ConsentedAt: "2026-07-22T08:00:00Z", PolicyVersion: "v1.0-2026", IPAddress: "127.0.0.1", UserRole: "Admin" },
+    { id: "UC-1002", UserId: "amit080578@gmail.com", SocietyId: "greenwood", ConsentedAt: "2026-07-22T08:05:00Z", PolicyVersion: "v1.0-2026", IPAddress: "127.0.0.1", UserRole: "Admin" }
+  ];
 }
 
 const backupDb = new BackupDatabase();
 
 export const api = {
+  async getUserConsents() {
+    try {
+      if (SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY' || !SUPABASE_ANON_KEY) {
+        return backupDb.userConsents;
+      }
+      const response = await axios.get(\`\${SUPABASE_URL}/rest/v1/UserConsents?select=*\`, { headers });
+      return response.data;
+    } catch (error) {
+      console.warn("Using simulated backup consents data.");
+      return backupDb.userConsents;
+    }
+  },
+
+  async saveUserConsent(consent) {
+    try {
+      if (SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY' || !SUPABASE_ANON_KEY) {
+        backupDb.userConsents.unshift(consent);
+        return { success: true };
+      }
+      await axios.post(\`\${SUPABASE_URL}/rest/v1/UserConsents\`, consent, { headers });
+      return { success: true };
+    } catch (error) {
+      console.error("Save consent failed:", error);
+      throw error;
+    }
+  },
   async getMembers() {
     try {
       if (SUPABASE_ANON_KEY === 'YOUR_SUPABASE_ANON_KEY' || !SUPABASE_ANON_KEY) {
@@ -2998,6 +3029,7 @@ export const SUPABASE_SQL_SCHEMA = `-- =========================================
 -- ============================================================================
 
 -- 1. DROP EXISTING TABLES IF THEY EXIST (CLEAN RE-RUN)
+DROP TABLE IF EXISTS "UserConsents" CASCADE;
 DROP TABLE IF EXISTS "StaffAttendance" CASCADE;
 DROP TABLE IF EXISTS "Staff" CASCADE;
 DROP TABLE IF EXISTS "Vendors" CASCADE;
@@ -3066,6 +3098,17 @@ CREATE TABLE "UserAuth" (
   "RoleId" TEXT NOT NULL REFERENCES "Roles"("id") ON DELETE CASCADE,
   "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
   "Status" TEXT DEFAULT 'Active'
+);
+
+-- UserConsents (Digital Personal Data Protection Act 2023)
+CREATE TABLE "UserConsents" (
+  "id" TEXT PRIMARY KEY,
+  "UserId" TEXT NOT NULL,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "ConsentedAt" TEXT NOT NULL,
+  "PolicyVersion" TEXT DEFAULT 'v1.0-2026',
+  "IPAddress" TEXT DEFAULT '127.0.0.1',
+  "UserRole" TEXT DEFAULT 'Member'
 );
 
 -- Members
@@ -3468,6 +3511,7 @@ ALTER TABLE "AssetAMCs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "WaterMeters" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Polls" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "PollVotes" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "UserConsents" ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
 -- POLICIES BY TABLE (Public & Anon Access Enabled for REST API & Seeding)
@@ -3478,7 +3522,7 @@ DECLARE
   tbl text;
   pol text;
   tables text[] := ARRAY[
-    'Societies', 'Roles', 'UserAuth', 'Members', 'Payments', 'Vendors', 
+    'Societies', 'Roles', 'UserAuth', 'UserConsents', 'Members', 'Payments', 'Vendors', 
     'Expenses', 'Staff', 'StaffAttendance', 'Complaints', 'Notices', 
     'Invoices', 'Visitors', 'ComplaintReplies', 'AuditLogs', 'FacilityBookings', 
     'EmergencyContacts', 'Tenants', 'Vehicles', 'GuestParking', 
@@ -3632,6 +3676,11 @@ INSERT INTO "Polls" ("id", "SocietyId", "Title", "Description", "Category", "Sta
 -- PollVotes Seed
 INSERT INTO "PollVotes" ("id", "PollId", "SocietyId", "FlatNo", "VotedBy", "Vote", "Timestamp") VALUES
 ('PV-1', 'POLL-1', 'greenwood', '101', 'Amit Sharma', 'In Favor', '2026-07-05T10:15:00.000Z');
+
+-- UserConsents Seed (Digital Personal Data Protection Act 2023)
+INSERT INTO "UserConsents" ("id", "UserId", "SocietyId", "ConsentedAt", "PolicyVersion", "IPAddress", "UserRole") VALUES
+('UC-1001', 'Auth-gw-amit-sharma', 'greenwood', '2026-07-22T08:00:00Z', 'v1.0-2026', '127.0.0.1', 'Admin'),
+('UC-1002', 'amit080578@gmail.com', 'greenwood', '2026-07-22T08:05:00Z', 'v1.0-2026', '127.0.0.1', 'Admin');
 
 -- ============================================================================
 -- 5. PRIVATE SUPABASE STORAGE BUCKETS SETUP & SIGNED URL ACCESS POLICIES

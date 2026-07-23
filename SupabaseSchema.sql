@@ -4,6 +4,8 @@
 -- ============================================================================
 
 -- 1. DROP EXISTING TABLES IF THEY EXIST (CLEAN RE-RUN)
+DROP TABLE IF EXISTS "PushTokens" CASCADE;
+DROP TABLE IF EXISTS "UserConsents" CASCADE;
 DROP TABLE IF EXISTS "StaffAttendance" CASCADE;
 DROP TABLE IF EXISTS "Staff" CASCADE;
 DROP TABLE IF EXISTS "Vendors" CASCADE;
@@ -72,6 +74,29 @@ CREATE TABLE "UserAuth" (
   "RoleId" TEXT NOT NULL REFERENCES "Roles"("id") ON DELETE CASCADE,
   "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
   "Status" TEXT DEFAULT 'Active'
+);
+
+-- UserConsents (Digital Personal Data Protection Act 2023 Consent Audit Trail)
+CREATE TABLE "UserConsents" (
+  "id" TEXT PRIMARY KEY,
+  "UserId" TEXT NOT NULL,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "ConsentedAt" TEXT NOT NULL,
+  "PolicyVersion" TEXT DEFAULT 'v1.0-2026',
+  "IPAddress" TEXT DEFAULT '127.0.0.1',
+  "UserRole" TEXT DEFAULT 'Member'
+);
+
+-- PushTokens (Expo Push Notification Device Mapping)
+CREATE TABLE "PushTokens" (
+  "id" TEXT PRIMARY KEY,
+  "UserId" TEXT NOT NULL,
+  "SocietyId" TEXT NOT NULL REFERENCES "Societies"("id") ON DELETE CASCADE,
+  "FlatNo" TEXT NOT NULL,
+  "ExpoPushToken" TEXT NOT NULL,
+  "DeviceOS" TEXT DEFAULT 'android',
+  "CreatedAt" TEXT NOT NULL,
+  "LastUsedAt" TEXT
 );
 
 -- Members
@@ -452,6 +477,7 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 ALTER TABLE "Societies" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Roles" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "UserAuth" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "UserConsents" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Members" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Payments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Vendors" ENABLE ROW LEVEL SECURITY;
@@ -474,6 +500,7 @@ ALTER TABLE "AssetAMCs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "WaterMeters" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Polls" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "PollVotes" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PushTokens" ENABLE ROW LEVEL SECURITY;
 
 -- ----------------------------------------------------------------------------
 -- POLICIES BY TABLE (Public & Anon Access Enabled for REST API & Seeding)
@@ -484,7 +511,7 @@ DECLARE
   tbl text;
   pol text;
   tables text[] := ARRAY[
-    'Societies', 'Roles', 'UserAuth', 'Members', 'Payments', 'Vendors', 
+    'Societies', 'Roles', 'UserAuth', 'UserConsents', 'PushTokens', 'Members', 'Payments', 'Vendors', 
     'Expenses', 'Staff', 'StaffAttendance', 'Complaints', 'Notices', 
     'Invoices', 'Visitors', 'ComplaintReplies', 'AuditLogs', 'FacilityBookings', 
     'EmergencyContacts', 'Tenants', 'Vehicles', 'GuestParking', 
@@ -638,6 +665,16 @@ INSERT INTO "Polls" ("id", "SocietyId", "Title", "Description", "Category", "Sta
 -- PollVotes Seed
 INSERT INTO "PollVotes" ("id", "PollId", "SocietyId", "FlatNo", "VotedBy", "Vote", "Timestamp") VALUES
 ('PV-1', 'POLL-1', 'greenwood', '101', 'Amit Sharma', 'In Favor', '2026-07-05T10:15:00.000Z');
+
+-- UserConsents Seed (Digital Personal Data Protection Act 2023)
+INSERT INTO "UserConsents" ("id", "UserId", "SocietyId", "ConsentedAt", "PolicyVersion", "IPAddress", "UserRole") VALUES
+('UC-1001', 'Auth-gw-amit-sharma', 'greenwood', '2026-07-22T08:00:00Z', 'v1.0-2026', '127.0.0.1', 'Admin'),
+('UC-1002', 'amit080578@gmail.com', 'greenwood', '2026-07-22T08:05:00Z', 'v1.0-2026', '127.0.0.1', 'Admin');
+
+-- PushTokens Seed (Expo Push Notification Device Mapping)
+INSERT INTO "PushTokens" ("id", "UserId", "SocietyId", "FlatNo", "ExpoPushToken", "DeviceOS", "CreatedAt", "LastUsedAt") VALUES
+('TOK-101-1', 'Auth-gw-amit-sharma', 'greenwood', '101', 'ExponentPushToken[SimulatedToken_Amit_Flat101]', 'android', '2026-07-22T08:00:00Z', '2026-07-23T00:00:00Z'),
+('TOK-102-1', 'M-greenwood-102', 'greenwood', '102', 'ExponentPushToken[SimulatedToken_Priya_Flat102]', 'ios', '2026-07-21T10:00:00Z', '2026-07-22T12:00:00Z');
 
 -- ============================================================================
 -- 5. PRIVATE SUPABASE STORAGE BUCKETS SETUP & SIGNED URL ACCESS POLICIES

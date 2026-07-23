@@ -98,6 +98,8 @@ import {
   Staff,
   StaffAttendance,
   Vendor,
+  UserConsent,
+  PushToken,
 } from "../types";
 import {
   hashPassword,
@@ -105,6 +107,11 @@ import {
   generateVisitorAccessToken,
 } from "../utils/security";
 import { getSignedFileUrl, StorageBucket } from "../utils/supabaseStorage";
+import {
+  registerForPushNotificationsAsync,
+  notifyVisitorCheckIn,
+  notifyNoticePublished,
+} from "../utils/notifications";
 import FacilityBookingManager from "./FacilityBookingManager";
 
 interface MobileSimulatorProps {
@@ -242,6 +249,10 @@ interface MobileSimulatorProps {
   ) => void;
   onAddDues?: (flatNo: string, amount: number, desc: string) => void;
   onAddAuditLog?: (action: string, details: string) => void;
+  userConsents?: UserConsent[];
+  onAddUserConsent?: (consent: Omit<UserConsent, "id">) => void;
+  pushTokens?: PushToken[];
+  onAddPushToken?: (token: Omit<PushToken, "id">) => void;
   theme?: "light" | "dark";
 }
 
@@ -327,6 +338,10 @@ export default function MobileSimulator({
   onCreateSociety,
   onAddDues,
   onAddAuditLog,
+  userConsents = [],
+  onAddUserConsent,
+  pushTokens = [],
+  onAddPushToken,
   theme = "dark",
 }: MobileSimulatorProps) {
   const isDark = theme === "dark";
@@ -10257,8 +10272,16 @@ export default function MobileSimulator({
                           TokenExpiresAt: expiresAt,
                         });
 
+                        notifyVisitorCheckIn(
+                          pushTokens,
+                          activeSocietyId,
+                          loggedInMemberFlat,
+                          newVisName.trim(),
+                          newVisPurpose,
+                        );
+
                         triggerToast(
-                          `Pre-approved guest ${newVisName.trim()} with token ${token}!`,
+                          `Pre-approved guest ${newVisName.trim()} (📲 Push alert sent to device)!`,
                         );
                         setShowAddVisitorModal(false);
                         setNewVisName("");
@@ -10383,7 +10406,17 @@ export default function MobileSimulator({
                               ? "Admin Secretary"
                               : "Committee Member",
                         });
-                        triggerToast("Notice broadcast successfully!");
+
+                        notifyNoticePublished(
+                          pushTokens,
+                          activeSocietyId,
+                          newNoticeTitle,
+                          newNoticeCategory,
+                        );
+
+                        triggerToast(
+                          "Notice broadcasted & Expo push notifications sent!",
+                        );
                         setIsBroadcastModalOpen(false);
                         setNewNoticeTitle("");
                         setNewNoticeContent("");
