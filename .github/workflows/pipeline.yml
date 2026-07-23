@@ -75,7 +75,7 @@ jobs:
       - name: Build Android APK
         run: |
           cd android
-          gradle wrapper
+          gradle wrapper --gradle-version 8.7
           ./gradlew assembleDebug
 
       - name: Upload to Firebase App Distribution
