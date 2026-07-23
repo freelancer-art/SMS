@@ -8,7 +8,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:happy": "jest tests/01-happy-path",
+    "test:negative": "jest tests/02-negative",
+    "test:security": "jest tests/03-security",
+    "test:performance": "jest tests/04-performance",
+    "test:all": "jest"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -25,13 +30,16 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "jest": "^30.4.2",
     "tailwindcss": "^4.1.14",
+    "ts-jest": "^29.4.12",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "@types/express": "^4.17.21"
+    "vite": "^6.2.3"
   }
 }
