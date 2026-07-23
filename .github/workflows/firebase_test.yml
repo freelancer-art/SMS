@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pull the codebase from GitHub
+      # 1. Pull code from GitHub
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -22,26 +22,26 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Grant permissions to build script
-      - name: Make Gradlew Executable
-        run: chmod +x gradlew
+      # 3. Setup Gradle (This automatically provides the gradle executable if gradlew is missing)
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      # 4. Build the Debug APK
+      # 4. Build Debug APK using installed Gradle
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
-      # 5. Authenticate with Google Cloud
+      # 5. Authenticate to Google Cloud
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v2'
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      # 6. Set up gcloud CLI
+      # 6. Set up Cloud SDK
       - name: 'Set up Cloud SDK'
         uses: 'google-github-actions/setup-gcloud@v2'
 
-      # 7. Send APK to Firebase Test Lab for Robo Crawl
+      # 7. Run Robo Test on Firebase Test Lab
       - name: 'Run Robo Test on Firebase Test Lab'
         run: |
           gcloud firebase test android run \
