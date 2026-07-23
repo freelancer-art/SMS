@@ -11,20 +11,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pull code from GitHub
+      # 1. Pull code from GitHub (Updated to v5)
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      # 2. Set up Java
+      # 2. Set up Java (Updated to v5)
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3. Setup Gradle (This automatically provides the gradle executable if gradlew is missing)
+      # 3. Setup Gradle (Provides gradle automatically)
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+        uses: gradle/actions/setup-gradle@v4
 
       # 4. Build Debug APK using installed Gradle
       - name: Build Debug APK
