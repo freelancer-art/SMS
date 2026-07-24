@@ -4,7 +4,7 @@
 ---
 
 ## 📌 Executive Summary
-The Smart Co-op Housing Society SaaS Platform includes a comprehensive automated test framework powered by **Jest**, **Playwright**, and **Supabase CLI**. The test suite validates happy path workflows, boundary constraints, cross-tenant security isolation, performance SLAs, RBAC rights, and forced credential gates.
+The Smart Co-op Housing Society SaaS Platform includes a comprehensive automated test framework powered by **Jest**, **Playwright**, and **Supabase CLI**. The test suite validates happy path workflows, boundary constraints, cross-tenant security isolation, performance SLAs, RBAC rights, NOC clearance rules, staff entry restrictions, and forced credential gates.
 
 ---
 
@@ -13,7 +13,7 @@ The Smart Co-op Housing Society SaaS Platform includes a comprehensive automated
 To execute the automated test suites, use the following standard terminal commands:
 
 ```bash
-# Run all Jest test suites (41+ tests across 13 test files)
+# Run all Jest test suites (51 tests across 15 test files)
 npm run test:all
 
 # Run E2E Playwright tests in headless browser
@@ -37,10 +37,14 @@ tests/
 │   ├── billing.test.ts             # Batch invoicing & receipt payment processing
 │   ├── gatekeeper.test.ts          # Visitor QR pass generation & entry/exit logs
 │   ├── voting.test.ts              # AGM resolution creation & ballot submission
-│   └── modules.test.ts             # Water meters, Tenants, Amenities, Parking, AMC, Expenses
+│   ├── modules.test.ts             # Water meters, Tenants, Amenities, Parking, AMC, Expenses
+│   ├── noc-clearance.test.ts       # NOC move-in/move-out application, approval, and deposit refund
+│   ├── staff-tracking.test.ts      # Domestic staff passcode check-in, attendance logs, and directory
+│   └── asset-inventory.test.ts     # Asset register, warranty tracking, and AMC contract renewals
 ├── 02-negative/
 │   ├── invalid-inputs.test.ts      # Malformed CSVs, bad phone numbers, duplicate flats
-│   └── expired-tokens.test.ts      # Expired QR passes & double voting attempts
+│   ├── expired-tokens.test.ts      # Expired QR passes & double voting attempts
+│   └── noc-staff-assets-negative.test.ts # NOC blocking on unpaid dues, terminated staff gate block, duplicate asset tag
 ├── 03-security/
 │   └── rls-isolation.test.ts       # Cross-tenant data isolation & write blocks
 ├── 04-performance/
@@ -87,6 +91,21 @@ tests/
 - **`Asset AMC`**: Tracks elevator service contract and upcoming AMC maintenance due dates.
 - **`Dual-Approval Expenses`**: Executes dual-committee approval workflow for high-value society expenditure (> ₹50,000).
 
+#### 6. `noc-clearance.test.ts`
+- **`Should submit new NOC move-in request and initialize deposit tracking`**: Validates applicant form submission, shift date logging, and initial status = `pending`.
+- **`Should process Treasurer approval on zero dues and Secretary issuing NOC certificate`**: Dual-approval workflow progressing from `pending` -> `treasurer_approved` -> `issued`.
+- **`Should process move-in deposit refund when resident vacates or completes shift`**: Toggles `DepositRefunded: true` and logs refund audit trail.
+
+#### 7. `staff-tracking.test.ts`
+- **`Should check in domestic staff at Gate 1 and log attendance`**: Validates staff passcode entry, setting status to 'Inside' and logging entry timestamp.
+- **`Should check out domestic staff at Gate 1 and update status`**: Sets status to 'Checked Out' and records checkout timestamp.
+- **`Should add new domestic staff member to society directory`**: Onboards maid/cook with passcode, assigned flats, and QR token.
+
+#### 8. `asset-inventory.test.ts`
+- **`Should add new society asset and log warranty expiry date`**: Registers elevator/generator asset with cost, model, and service interval.
+- **`Should update asset operational status to under maintenance`**: Updates status from 'operational' to 'under_maintenance'.
+- **`Should detect AMC contracts expiring within 30 days and dispatch notifications`**: Triggers auto-notification for upcoming contract renewal.
+
 ---
 
 ### Directory 02: Negative & Boundary Edge Cases (`tests/02-negative/`)
@@ -99,6 +118,11 @@ tests/
 #### 2. `expired-tokens.test.ts`
 - **`Should reject entry scan for expired QR gate pass token`**: Asserts gate kiosk denies entry for passes generated past `passExpiryHours`.
 - **`Should strictly block double voting attempts for the same flat on AGM Resolution`**: Enforces 1-Flat = 1-Vote policy as per Bye-Law 114.
+
+#### 3. `noc-staff-assets-negative.test.ts`
+- **`Should block NOC approval if flat has unpaid maintenance dues`**: Rejects Treasurer approval if flat balance > 0.
+- **`Should reject staff gate check-in with invalid passcode or terminated status`**: Denies entry for wrong 4-digit PIN or inactive staff.
+- **`Should reject duplicate asset tag or negative purchase cost for society inventory`**: Validates positive purchase cost and unique tag numbers.
 
 ---
 
@@ -113,7 +137,7 @@ tests/
 ### Directory 04: Performance Benchmarks (`tests/04-performance/`)
 
 #### 1. `batch-invoice-load.test.ts`
-- **`Batch Invoicing SLA Execution Speed`**: Generates 100+ batch flat invoices and asserts execution completes under **500ms SLA threshold** (actual result: ~0.35ms).
+- **`Batch Invoicing SLA Execution Speed`**: Generates 100+ batch flat invoices and asserts execution completes under **500ms SLA threshold** (actual result: ~0.29ms).
 
 ---
 
@@ -121,7 +145,7 @@ tests/
 
 #### 1. `identity-security.test.ts`
 - **`test_duplicate_society_names`**: Onboards two societies with identical names (*"Om Residency"*) and verifies disambiguated codes (`OMRE1` vs `OMRE2`) and short-hash slugs prevent auth routing collisions.
-- **`test_forced_password_reset_gate`**: Simulates navigating to protected routes with `MustChangePassword: true` and verifies route guard redirects to `/forced-password-reset` until password is updated.
+- **`test_forced_password_reset_gate`**: Simulates navigating to protected routes with `MustChangePassword: true` and verifies route guard redirects to forced password reset modal until password is updated.
 
 ---
 
@@ -142,15 +166,15 @@ tests/
 
 | Test Category | Total Test Cases | Execution Time | SLA Pass Criteria | Result |
 | :--- | :--- | :--- | :--- | :--- |
-| **01 Happy Path Workflows** | 12 Tests | ~45ms | 100% Pass | PASS ✅ |
-| **02 Negative Scenarios** | 5 Tests | ~25ms | 100% Pass | PASS ✅ |
+| **01 Happy Path Workflows** | 21 Tests | ~65ms | 100% Pass | PASS ✅ |
+| **02 Negative Scenarios** | 8 Tests | ~35ms | 100% Pass | PASS ✅ |
 | **03 Security RLS Isolation** | 4 Tests | ~15ms | 0 Cross-Tenant Leaks | PASS ✅ |
-| **04 Performance SLA** | 1 Test (150 Invoices) | ~0.35ms | < 500ms | PASS ✅ (0.35ms) |
+| **04 Performance SLA** | 1 Test (150 Invoices) | ~0.29ms | < 500ms | PASS ✅ (0.29ms) |
 | **05 Committee RBAC & Toggles**| 5 Tests | ~10ms | 100% Role Enforcement | PASS ✅ |
 | **06 Auth & Identity Security** | 2 Tests | ~12ms | 100% Disambiguation | PASS ✅ |
 | **07 Governance & RLS** | 2 Tests | ~10ms | HTTP 403 Block | PASS ✅ |
-| **08 Boundary Constraints** | 7 Tests | ~35ms | 100% Input Guard | PASS ✅ |
-| **TOTAL TEST SUITE** | **41 Tests** | **~1.8s** | **13 / 13 Test Suites Passed** | **PASS ALL ✅** |
+| **08 Boundary Constraints** | 8 Tests | ~40ms | 100% Input Guard | PASS ✅ |
+| **TOTAL TEST SUITE** | **51 Tests** | **~1.9s** | **15 / 15 Test Suites Passed** | **PASS ALL ✅** |
 
 ---
 *Test Suite Specification Version 3.0 — Smart Co-op Housing Society SaaS Platform*

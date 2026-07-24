@@ -10,6 +10,12 @@
 4. [Phase 3: Module Settings Catalog & Tenant Discretion Toggles](#phase-3-module-settings-catalog--tenant-discretion-toggles)
 5. [Phase 4: Master Configurable Items Reference Matrix](#phase-4-master-configurable-items-reference-matrix)
 6. [Phase 5: Daily & Monthly Operational Workflows](#phase-5-daily--monthly-operational-workflows)
+   - 5.1 Automated Monthly Batch Invoicing & Printable Receipts
+   - 5.2 Gatekeeper Visitor Entry & QR Camera Scanner
+   - 5.3 Domestic Staff Entry & Daily Attendance Logs
+   - 5.4 Resident NOC Clearance & Move-In Deposit Workflow
+   - 5.5 Society Asset Inventory & AMC Expiry Alerts
+   - 5.6 Real-Time Notification Center & Emergency Banner
 7. [Phase 6: Automated Test Suites & Security Boundaries](#phase-6-automated-test-suites--security-boundaries)
 8. [Phase 7: Comprehensive Troubleshooting & Error Resolution Matrix](#phase-7-comprehensive-troubleshooting--error-resolution-matrix)
 
@@ -70,11 +76,11 @@ The platform enforces Role-Based Access Control across 7 standard role definitio
 | :--- | :--- | :--- |
 | **SOCIETY_ADMIN** | Managing Committee Administrator | `["*"]` (Full administrative override rights) |
 | **PRESIDENT** | Society Chief Executive | `["voting:write", "notices:write", "helpdesk:write", "committee:read"]` |
-| **SECRETARY** | Operational Administrative Head | `["voting:write", "notices:write", "helpdesk:write", "amenities:write", "tenants:write"]` |
-| **TREASURER** | Financial & Accounting Head | `["billing:read", "billing:write", "expenses:write", "audit:read"]` |
+| **SECRETARY** | Operational Administrative Head | `["voting:write", "notices:write", "helpdesk:write", "amenities:write", "tenants:write", "noc:write"]` |
+| **TREASURER** | Financial & Accounting Head | `["billing:read", "billing:write", "expenses:write", "audit:read", "noc:approve"]` |
 | **AUDITOR** | Independent Compliance Inspector | `["billing:read", "expenses:read", "audit:read"]` (Read-only financial access) |
-| **GATE_STAFF** | Main Gate Security Guard | `["gatekeeper:read", "gatekeeper:write", "alerts:write"]` |
-| **RESIDENT** | Flat Owner or Registered Tenant | `["self:read", "billing:pay", "helpdesk:file", "voting:cast"]` |
+| **GATE_STAFF** | Main Gate Security Guard | `["gatekeeper:read", "gatekeeper:write", "alerts:write", "staff:write"]` |
+| **RESIDENT** | Flat Owner or Registered Tenant | `["self:read", "billing:pay", "helpdesk:file", "voting:cast", "noc:read"]` |
 
 ### Modifying Committee Role Assignments
 1. Open **Committee RBAC Console** (`#committee-rbac-btn`) in the Admin Console.
@@ -99,26 +105,11 @@ Societies can toggle features ON or OFF dynamically based on their specific infr
   "facility_booking": true,
   "water_meters": true,
   "tenants": true,
-  "document_vault": true
-}
-```
-
-### Module Configuration Settings (`module_settings` JSONB)
-
-```json
-{
-  "gatekeeper": {
-    "autoApproveGuests": true,
-    "passExpiryHours": 12
-  },
-  "billing": {
-    "enableGST": true,
-    "autoInvoiceDay": 1
-  },
-  "society": {
-    "dueDateDay": 15,
-    "lateFeeInterestPercent": 12
-  }
+  "document_vault": true,
+  "staff_tracking": true,
+  "noc_clearance": true,
+  "asset_inventory": true,
+  "emergency_alerts": true
 }
 ```
 
@@ -130,36 +121,55 @@ Societies can toggle features ON or OFF dynamically based on their specific infr
 | :--- | :--- | :--- | :--- | :--- |
 | **Society Metadata** | `Name` | `Greenwood Residency Co-Op Housing Society Ltd.` | String (3–120 chars) | Legal society title. Auto-generates unique `SocietyCode` & URL slug. |
 | **Society Metadata** | `GSTIN` | `27AAACG1234H1Z5` | String (15-char Regex) | 15-character statutory GST identification number. Must match standard regex. |
-| **Society Metadata** | `BuildingType` | `Housing Society` \| `Apartment Complex` | Enum | Architectural designation used in invoice letterheads. |
 | **Financial Engine** | `BillingMode` | `Flat Rate` \| `SqFt Rate` \| `Hybrid` | Enum | Calculation model for batch invoice generation. |
 | **Financial Engine** | `RatePerSqFt` | `3.50` | Numeric (> 0) | Rate multiplied by flat SqFt area when `BillingMode` is `SqFt Rate`. |
 | **Financial Engine** | `FlatRateAmount` | `2500` | Numeric (> 0) | Fixed maintenance charge per unit when `BillingMode` is `Flat Rate`. |
 | **Financial Engine** | `DueDateDay` | `15` | Integer (1–28) | Cutoff day of the month for maintenance payments. Must be between 1 and 28. |
 | **Financial Engine** | `LateFeeInterestPercent` | `12` | Numeric (0–50%) | Annual interest rate charged on overdue maintenance balances. |
-| **Water Metering** | `ratePerUnit` | `15.00` | Numeric (> 0) | Rate in ₹ per unit of water consumed. |
-| **Water Metering** | `tier1Limit` | `5000` | Integer (> 0) | Monthly liter limit before higher tariff tier applies. |
 | **Gatekeeper** | `passExpiryHours` | `12` | Integer (1–72) | Duration in hours before pre-approved visitor QR code expires. |
-| **Gatekeeper** | `gatePasscode` | `admin123` | String (Min 6 chars) | Administrative passcode for gate guard kiosk terminals. |
-| **Facility Booking**| `maxAdvanceDays` | `30` | Integer (1–90) | Maximum days in advance a resident can reserve an amenity slot. |
-| **AGM Voting** | `enforceOneVotePerFlat` | `true` | Boolean | Strictly enforces 1 ballot per flat number as per Bye-Law 114. |
+| **Staff Tracking** | `requireGatePasscode` | `true` | Boolean | Enforces 4-digit PIN for domestic staff gate check-in. |
+| **NOC Clearance** | `defaultMoveInDeposit` | `5000.00` | Numeric (> 0) | Default refundable move-in deposit required from incoming residents. |
+| **Asset AMC** | `amcExpiryNoticeDays` | `30` | Integer (1–90) | Days prior to AMC contract expiration to trigger alert notifications. |
 
 ---
 
 ## Phase 5: Daily & Monthly Operational Workflows
 
-### 5.1 Automated Monthly Batch Invoicing
+### 5.1 Automated Monthly Batch Invoicing & Printable Receipts
 1. Navigate to **Financials ➔ Invoices ➔ Generate Batch Invoices**.
 2. Select Billing Month & Year (e.g. *August 2026*).
-3. The system calculates dues for each unit:
+3. System calculates dues:
    $$\text{Total Invoice} = \text{Base Maintenance} + \text{Water Meter Usage} + \text{Parking Fees} + \text{Arrears} - \text{Advance Credits}$$
-4. Click **Publish & Broadcast Invoices** — dispatches instant push notifications and emails with direct payment links to all residents.
+4. Click **Publish & Broadcast Invoices** — dispatches push notifications and emails with direct payment links to all residents.
+5. Residents can click **Print Receipt** on any paid invoice to generate a clean, formatted PDF receipt statement complete with GST breakdowns and society letterhead.
 
-### 5.2 Gatekeeper Visitor Entry Workflow
+### 5.2 Gatekeeper Visitor Entry & QR Camera Scanner
 1. Guard accesses **Gatekeeper Kiosk** using security guard credentials.
-2. Enters Visitor Name, Mobile Number, Vehicle Number, Purpose, and Target Flat.
-3. System dispatches real-time **Expo Push Notification** to the resident's smartphone.
-4. Resident taps **Approve** ➔ Kiosk displays green *"Entry Granted"* notification.
-5. For pre-approved visitors, the guard scans the guest's 6-digit OTP or QR code for 1-tap entry.
+2. Guard can manually enter visitor details OR tap **Scan QR Passcode** to launch the camera scanner simulator.
+3. Aligning the visitor's QR code token instantly validates access authorization and logs entry time.
+4. Resident receives a real-time Expo push notification upon visitor arrival.
+
+### 5.3 Domestic Staff Entry & Daily Attendance Logs
+1. Guards select staff member (maid, cook, driver) from the **Staff Tracking Directory**.
+2. Staff enters their assigned 4-digit PIN or scans their QR token.
+3. System validates active employment status and updates status to **'Inside Premises'**.
+4. Resident receives a notification that their assigned staff has checked in, and can view active attendance logs.
+
+### 5.4 Resident NOC Clearance & Move-In Deposit Workflow
+1. Resident submits an NOC application for **Move-In** or **Move-Out** via the NOC Workflow Module.
+2. **Treasurer Dues Audit**: System verifies flat maintenance balance = ₹0. Treasurer approves dues clearance.
+3. **Secretary Authorization**: Secretary reviews applicant details and issues the digital NOC certificate with move-in deposit tracking.
+4. Upon vacating or shift completion, Treasurer toggles deposit refund status to **Refunded**.
+
+### 5.5 Society Asset Inventory & AMC Expiry Alerts
+1. Committee Admins manage elevators, generators, water pumps, and fire safety systems in the **Asset Inventory Register**.
+2. System logs vendor details, warranty expiry dates, and AMC contract terms.
+3. Automated background engine checks contract dates daily: when a contract is within **30 days of expiration**, a high-priority push notification is automatically sent to all Committee Admins.
+
+### 5.6 Real-Time Notification Center & Emergency Banner
+1. Residents and admins view unread notification counts on the top bell icon.
+2. Clicking the bell opens the **Notification Center Modal**, supporting filtering by Emergency, Gate, Notice, and Billing categories.
+3. For critical society emergencies (water pipe bursts, power outages, security alerts), admins publish a sticky **Top Emergency Alert Banner** that renders prominently on all resident home screens.
 
 ---
 
@@ -169,7 +179,7 @@ The platform features an automated E2E test suite built with **Jest**, **Playwri
 
 ### Running the Test Suite
 ```bash
-# Run all Jest automated test suites
+# Run all Jest automated test suites (51 tests across 15 files)
 npm run test:all
 
 # Run E2E Playwright tests
@@ -179,16 +189,6 @@ npm run test:e2e
 npm run test:security
 ```
 
-### Key Automated Test Coverage
-- **`01-happy-path/`**: Batch invoicing, visitor passes, AGM voting, water metering, amenity booking, dual-approval expenses.
-- **`02-negative/`**: Expired visitor tokens, duplicate flat registration, malformed CSV uploads.
-- **`03-security/`**: Cross-tenant RLS isolation checks.
-- **`04-performance/`**: Batch invoicing SLA benchmark (<500ms for 100+ flats).
-- **`05-rbac-and-toggles/`**: Role permission enforcement and feature toggle evaluation.
-- **`06-auth-and-identity/`**: `test_duplicate_society_names` and `test_forced_password_reset_gate`.
-- **`07-governance-and-rls/`**: `test_disabled_feature_access_blocked` and `test_treasurer_vs_secretary_rbac`.
-- **`08-negative-and-boundaries/`**: Invalid OTPs, expired passwords, negative penalty interest rates, invalid due dates.
-
 ---
 
 ## Phase 7: Comprehensive Troubleshooting & Error Resolution Matrix
@@ -196,12 +196,10 @@ npm run test:security
 | Error Message | Root Cause | Step-by-Step Resolution Procedure |
 | :--- | :--- | :--- |
 | **`"Resident unable to log in / Phone number not found"`** | Resident phone number missing or improperly formatted without country code. | 1. Open **Resident Directory**.<br>2. Search flat number.<br>3. Verify phone format (`+91 XXXXX XXXXX`).<br>4. Click **Resend Login Invite**. |
-| **`"Duplicate flat entry error during CSV import"`** | CSV file contains duplicate flat entries or flat already registered under another wing. | 1. Open CSV file in Excel/Google Sheets.<br>2. Run **Remove Duplicates** on `FlatNo` column.<br>3. Re-upload clean CSV file. |
+| **`"NOC Approval Blocked: Outstanding Maintenance Dues"`** | Resident flat has an unpaid balance > ₹0. | 1. Resident pays outstanding maintenance invoice via Payment Portal.<br>2. Treasurer verifies zero balance and re-runs NOC approval. |
+| **`"Staff Check-In Denied: Invalid Passcode / Inactive Status"`** | Incorrect 4-digit PIN entered or staff marked as Terminated. | 1. Open **Staff Tracking Directory**.<br>2. Verify staff member's passcode and ensure status is **Active**.<br>3. Reset passcode if forgotten. |
 | **`"Maintenance due date day must be between 1 and 28"`** | Due date set to 29, 30, or 31, which invalidates short months like February. | 1. Open **Module Settings & Toggles**.<br>2. Set `DueDateDay` to a valid number between 1 and 28 (Default: 15).<br>3. Save configuration. |
-| **`"Late fee penalty interest rate cannot be negative"`** | Negative number submitted for penalty interest percentage. | 1. Open **Module Settings & Toggles**.<br>2. Set `LateFeeInterestPercent` to a positive value between 0% and 50%.<br>3. Save configuration. |
-| **`"Access Denied: Voting module disabled by society"`** | Resident attempting to submit vote when `voting` module is toggled OFF in society settings. | 1. Managing Committee opens **Module Settings & Toggles**.<br>2. Toggle **AGM Resolution Polling & E-Voting** to **Active**.<br>3. Save settings. |
-| **`"HTTP 403: Insufficient Role Permissions"`** | Committee member attempting action outside their assigned RBAC rights (e.g. Secretary attempting invoice generation). | 1. Open **Committee RBAC Console**.<br>2. Verify user's assigned role.<br>3. If necessary, assign `SOCIETY_ADMIN` or `TREASURER` role. |
-| **`"QR Pass Expired / Entry Denied"`** | Pre-approved visitor pass scanned past the `passExpiryHours` window. | 1. Resident generates a fresh visitor pass in the mobile app.<br>2. Alternatively, guard uses manual visitor verification flow. |
+| **`"Access Denied: Module disabled by society"`** | User attempting to access a module toggled OFF in society settings. | 1. Managing Committee opens **Module Settings & Toggles**.<br>2. Enable desired feature (e.g. Staff Tracking or Asset AMC).<br>3. Save settings. |
 
 ---
 *Operational Manual Version 3.0 — Smart Co-op Housing Society Management SaaS*

@@ -1,4 +1,4 @@
-import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken } from '../types';
+import { Member, Payment, Expense, Complaint, Notice, Invoice, Visitor, ComplaintReply, SocietyDocument, AssetAMC, WaterMeter, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken, AppNotification, EmergencyAlert, VendorContract, NocRequest, SocietyAsset } from '../types';
 
 export const INITIAL_MEMBERS: Member[] = [
   {
@@ -1306,12 +1306,15 @@ export const INITIAL_STAFF: Staff[] = [
     Name: 'Sita Devi',
     Phone: '+91 98192 88301',
     ServiceType: 'Maid',
+    Role: 'Housekeeping / Maid',
     PhotoUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     Passcode: '1234',
+    QrCodeToken: 'QR-STF-101-SITA',
     IdVerificationStatus: 'Verified',
     IdProofType: 'Aadhaar',
     IdProofNumber: 'XXXX-XXXX-8921',
     AssignedFlats: ['101', '102', '201'],
+    GateStatus: 'Inside',
     Status: 'Active',
     CreatedAt: '2025-02-10'
   },
@@ -1321,12 +1324,15 @@ export const INITIAL_STAFF: Staff[] = [
     Name: 'Ramesh Sawant',
     Phone: '+91 98201 44556',
     ServiceType: 'Driver',
+    Role: 'Personal Driver',
     PhotoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     Passcode: '5678',
+    QrCodeToken: 'QR-STF-102-RAMESH',
     IdVerificationStatus: 'Verified',
     IdProofType: 'Driving License',
     IdProofNumber: 'MH02-2021-009923',
     AssignedFlats: ['101'],
+    GateStatus: 'Checked Out',
     Status: 'Active',
     CreatedAt: '2025-03-15'
   },
@@ -1336,12 +1342,15 @@ export const INITIAL_STAFF: Staff[] = [
     Name: 'Kamla Bai',
     Phone: '+91 97690 12345',
     ServiceType: 'Cook',
+    Role: 'Home Cook',
     PhotoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     Passcode: '2468',
+    QrCodeToken: 'QR-STF-103-KAMLA',
     IdVerificationStatus: 'Verified',
     IdProofType: 'Aadhaar',
     IdProofNumber: 'XXXX-XXXX-1144',
     AssignedFlats: ['102', '202', '301'],
+    GateStatus: 'Checked Out',
     Status: 'Active',
     CreatedAt: '2025-05-01'
   },
@@ -1351,12 +1360,15 @@ export const INITIAL_STAFF: Staff[] = [
     Name: 'Babu Lal',
     Phone: '+91 98334 99120',
     ServiceType: 'Cleaner',
+    Role: 'Car Washer / Cleaner',
     PhotoUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     Passcode: '1357',
+    QrCodeToken: 'QR-STF-104-BABU',
     IdVerificationStatus: 'Pending',
     IdProofType: 'Voter ID',
     IdProofNumber: 'ABC1234567',
     AssignedFlats: ['203', '302'],
+    GateStatus: 'Checked Out',
     Status: 'Active',
     CreatedAt: '2026-06-10'
   }
@@ -1491,6 +1503,259 @@ export const INITIAL_PUSH_TOKENS: PushToken[] = [
     LastUsedAt: '2026-07-22T12:00:00Z'
   }
 ];
+
+export const INITIAL_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'NOTIF-101',
+    SocietyId: 'greenwood',
+    UserId: 'Auth-gw-amit-sharma',
+    FlatNo: '101',
+    Title: '🚨 Visitor Check-In Alert',
+    Message: 'Sanjay Kumar (Plumber) has arrived at Main Gate for Flat 101.',
+    Type: 'gate',
+    IsRead: false,
+    CreatedAt: '2026-07-23T21:45:00Z',
+    Metadata: { flatNo: '101', visitorName: 'Sanjay Kumar' }
+  },
+  {
+    id: 'NOTIF-102',
+    SocietyId: 'greenwood',
+    UserId: 'Auth-gw-amit-sharma',
+    FlatNo: '101',
+    Title: '💳 Maintenance Invoice Generated',
+    Message: 'July 2026 Maintenance Bill INV-202607-101 of ₹3,975 is issued.',
+    Type: 'billing',
+    IsRead: false,
+    CreatedAt: '2026-07-23T18:30:00Z',
+    Metadata: { invoiceNo: 'INV-202607-101', amount: 3975 }
+  },
+  {
+    id: 'NOTIF-103',
+    SocietyId: 'greenwood',
+    UserId: 'all',
+    FlatNo: 'All',
+    Title: '📢 Notice Published: AGM Meeting',
+    Message: '12th Annual General Body Meeting scheduled on Sunday July 26th in Clubhouse.',
+    Type: 'notice',
+    IsRead: true,
+    CreatedAt: '2026-07-22T10:00:00Z',
+    Metadata: { noticeId: 'N-101' }
+  },
+  {
+    id: 'NOTIF-104',
+    SocietyId: 'greenwood',
+    UserId: 'all',
+    FlatNo: 'All',
+    Title: '⚠️ Urgent: Water Supply Interruption',
+    Message: 'Water tank cleaning scheduled tomorrow 10 AM to 4 PM. Please store adequate water.',
+    Type: 'emergency',
+    IsRead: false,
+    CreatedAt: '2026-07-23T20:00:00Z',
+    Metadata: { category: 'Maintenance' }
+  }
+];
+
+export const INITIAL_EMERGENCY_ALERTS: EmergencyAlert[] = [
+  {
+    id: 'ALERT-101',
+    SocietyId: 'greenwood',
+    AlertTitle: '🚨 CRITICAL: Elevator Cable Safety Inspection in Progress (Tower A Lift 2)',
+    Message: 'Tower A Lift 2 is out of service till 4 PM for emergency cable tension adjustment. Please use Lift 1 or stairs.',
+    Severity: 'critical',
+    ActiveUntil: '2026-07-25T16:00:00Z',
+    CreatedAt: '2026-07-24T06:00:00Z',
+    CreatedBy: 'Amit Sharma (Secretary)'
+  },
+  {
+    id: 'ALERT-102',
+    SocietyId: 'greenwood',
+    AlertTitle: '⚠️ WARNING: Overhead Tank Cleaning & Water Pressure Reduction',
+    Message: 'Water pressure will be low between 2 PM and 5 PM today due to main valve filter cleaning.',
+    Severity: 'warning',
+    ActiveUntil: '2026-07-24T17:00:00Z',
+    CreatedAt: '2026-07-24T07:30:00Z',
+    CreatedBy: 'Facility Committee'
+  }
+];
+
+export const INITIAL_VENDOR_CONTRACTS: VendorContract[] = [
+  {
+    id: 'VC-101',
+    SocietyId: 'greenwood',
+    VendorName: 'Schindler Elevator India Pvt Ltd',
+    ServiceType: 'Lift AMC Maintenance',
+    ContractStartDate: '2025-08-15',
+    ContractEndDate: '2026-08-15', // Expiring within 30 days!
+    ContactEmail: 'service.mumbai@schindler.com',
+    ContactPhone: '+91 22 6100 8800',
+    AnnualValue: 220000,
+    Status: 'Expiring Soon'
+  },
+  {
+    id: 'VC-102',
+    SocietyId: 'greenwood',
+    VendorName: 'Apex Guard Security Services',
+    ServiceType: '24x7 Security Guard Staffing',
+    ContractStartDate: '2025-09-01',
+    ContractEndDate: '2026-08-31', // Expiring within ~38 days
+    ContactEmail: 'billing@apexguards.com',
+    ContactPhone: '+91 22 2890 1122',
+    AnnualValue: 144000,
+    Status: 'Active'
+  },
+  {
+    id: 'VC-103',
+    SocietyId: 'greenwood',
+    VendorName: 'AquaClean Tank Hygiene Pvt Ltd',
+    ServiceType: 'Water Tank Scrubbing & UV Disinfection',
+    ContractStartDate: '2026-01-01',
+    ContractEndDate: '2026-12-31',
+    ContactEmail: 'info@aquaclean.co.in',
+    ContactPhone: '+91 98200 99887',
+    AnnualValue: 48000,
+    Status: 'Active'
+  }
+];
+
+export const INITIAL_NOC_REQUESTS: NocRequest[] = [
+  {
+    id: 'NOC-101',
+    SocietyId: 'greenwood',
+    FlatNo: '103',
+    ApplicantName: 'Rajesh Kumar',
+    ApplicantEmail: 'rajesh.k@example.com',
+    ApplicantPhone: '+91 98234 56789',
+    RequestType: 'move_in',
+    Status: 'issued',
+    ShiftDate: '2026-08-01',
+    MoveDepositAmount: 5000,
+    DepositRefunded: false,
+    TreasurerApprovedBy: 'Vikram Singh (Treasurer)',
+    TreasurerApprovedAt: '2026-07-21T10:30:00Z',
+    SecretaryApprovedBy: 'Amit Sharma (Secretary)',
+    SecretaryApprovedAt: '2026-07-23T14:15:00Z',
+    Remarks: 'All move-in deposits cleared. Protective lift padding requested.',
+    CreatedAt: '2026-07-19T09:00:00Z'
+  },
+  {
+    id: 'NOC-102',
+    SocietyId: 'greenwood',
+    FlatNo: '202',
+    ApplicantName: 'Anjali Gupta',
+    ApplicantEmail: 'anjali.g@example.com',
+    ApplicantPhone: '+91 99887 76655',
+    RequestType: 'move_out',
+    Status: 'treasurer_approved',
+    ShiftDate: '2026-08-10',
+    MoveDepositAmount: 5000,
+    DepositRefunded: false,
+    TreasurerApprovedBy: 'Vikram Singh (Treasurer)',
+    TreasurerApprovedAt: '2026-07-23T16:00:00Z',
+    Remarks: 'Pending final maintenance clearance from Secretary.',
+    CreatedAt: '2026-07-22T11:20:00Z'
+  },
+  {
+    id: 'NOC-103',
+    SocietyId: 'greenwood',
+    FlatNo: '302',
+    ApplicantName: 'Siddharth Shah',
+    ApplicantEmail: 'sidd.s@example.com',
+    ApplicantPhone: '+91 95544 33221',
+    RequestType: 'move_in',
+    Status: 'pending',
+    ShiftDate: '2026-08-15',
+    MoveDepositAmount: 5000,
+    DepositRefunded: false,
+    Remarks: 'Submitted tenant agreement copy and move deposit receipt.',
+    CreatedAt: '2026-07-24T08:00:00Z'
+  }
+];
+
+export const INITIAL_SOCIETY_ASSETS: SocietyAsset[] = [
+  {
+    id: 'AST-101',
+    SocietyId: 'greenwood',
+    AssetName: 'Tower A Passenger Elevator #1',
+    Category: 'Elevator',
+    Location: 'Tower A Core',
+    PurchaseDate: '2021-04-10',
+    WarrantyExpiry: '2023-04-10',
+    AmcVendorId: 'VC-101',
+    VendorName: 'Schindler Elevator India Pvt Ltd',
+    Status: 'operational',
+    SerialNumber: 'SCH-MUM-8821',
+    PurchaseCost: 1850000,
+    NextServiceDate: '2026-08-10',
+    LinkedTicketId: 'CMP-102',
+    CreatedAt: '2021-04-10'
+  },
+  {
+    id: 'AST-102',
+    SocietyId: 'greenwood',
+    AssetName: 'Tower A Passenger Elevator #2',
+    Category: 'Elevator',
+    Location: 'Tower A Core',
+    PurchaseDate: '2021-04-10',
+    WarrantyExpiry: '2023-04-10',
+    AmcVendorId: 'VC-101',
+    VendorName: 'Schindler Elevator India Pvt Ltd',
+    Status: 'under_maintenance',
+    SerialNumber: 'SCH-MUM-8822',
+    PurchaseCost: 1850000,
+    NextServiceDate: '2026-07-25',
+    LinkedTicketId: 'CMP-101',
+    CreatedAt: '2021-04-10'
+  },
+  {
+    id: 'AST-103',
+    SocietyId: 'greenwood',
+    AssetName: '125 KVA Silent Diesel Generator',
+    Category: 'Generator',
+    Location: 'DG Plant Substation',
+    PurchaseDate: '2022-01-15',
+    WarrantyExpiry: '2025-01-15',
+    AmcVendorId: 'VC-102',
+    VendorName: 'Cummins India',
+    Status: 'operational',
+    SerialNumber: 'CUM-DG-99201',
+    PurchaseCost: 950000,
+    NextServiceDate: '2026-09-01',
+    CreatedAt: '2022-01-15'
+  },
+  {
+    id: 'AST-104',
+    SocietyId: 'greenwood',
+    AssetName: 'Main Overhead Hydro-Pneumatic Pump',
+    Category: 'Water Pump',
+    Location: 'Pump Room Basement B2',
+    PurchaseDate: '2023-06-20',
+    WarrantyExpiry: '2025-06-20',
+    AmcVendorId: 'VC-103',
+    VendorName: 'Grundfos Pumps India',
+    Status: 'operational',
+    SerialNumber: 'GRU-HP-4411',
+    PurchaseCost: 280000,
+    NextServiceDate: '2026-08-05',
+    CreatedAt: '2023-06-20'
+  },
+  {
+    id: 'AST-105',
+    SocietyId: 'greenwood',
+    AssetName: '4K IP CCTV Camera Network (32 Channel)',
+    Category: 'CCTV & Gate',
+    Location: 'Main Gate & Perimeter',
+    PurchaseDate: '2022-11-01',
+    WarrantyExpiry: '2024-11-01',
+    VendorName: 'Hikvision India',
+    Status: 'operational',
+    SerialNumber: 'HIK-NVR-32CH',
+    PurchaseCost: 180000,
+    NextServiceDate: '2026-10-15',
+    CreatedAt: '2022-11-01'
+  }
+];
+
+
 
 
 

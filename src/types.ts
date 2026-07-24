@@ -13,6 +13,9 @@ export interface EnabledModules {
   water_meters: boolean;
   tenants: boolean;
   document_vault: boolean;
+  staff_tracking?: boolean;
+  noc_workflow?: boolean;
+  asset_inventory?: boolean;
 }
 
 export interface GatekeeperSettings {
@@ -52,6 +55,9 @@ export interface FeatureFlags {
   assetAMC: boolean;
   parkingRegister: boolean;
   documentVault: boolean;
+  staff_tracking?: boolean;
+  noc_workflow?: boolean;
+  asset_inventory?: boolean;
 }
 
 export interface Society {
@@ -157,14 +163,57 @@ export interface Staff {
   Name: string;
   Phone: string;
   ServiceType: 'Maid' | 'Cook' | 'Driver' | 'Cleaner' | 'Security Guard' | 'Gardener' | 'Electrician' | 'Plumber' | string;
+  Role?: string;
   PhotoUrl?: string;
   Passcode?: string;
+  QrCodeToken?: string;
   IdVerificationStatus: 'Verified' | 'Pending' | 'Rejected';
   IdProofType?: 'Aadhaar' | 'PAN' | 'Voter ID' | 'Driving License';
   IdProofNumber?: string;
   AssignedFlats: string[];
   GateStatus?: 'Inside' | 'Checked Out';
   Status: 'Active' | 'Inactive';
+  CreatedAt?: string;
+}
+
+export type SocietyStaff = Staff;
+
+export interface NocRequest {
+  id: string;
+  SocietyId: string;
+  FlatNo: string;
+  ApplicantName: string;
+  ApplicantEmail?: string;
+  ApplicantPhone?: string;
+  RequestType: 'move_in' | 'move_out';
+  Status: 'pending' | 'treasurer_approved' | 'issued' | 'rejected';
+  ShiftDate: string;
+  MoveDepositAmount: number;
+  DepositRefunded: boolean;
+  TreasurerApprovedBy?: string;
+  TreasurerApprovedAt?: string;
+  SecretaryApprovedBy?: string;
+  SecretaryApprovedAt?: string;
+  RejectionReason?: string;
+  Remarks?: string;
+  CreatedAt: string;
+}
+
+export interface SocietyAsset {
+  id: string;
+  SocietyId: string;
+  AssetName: string;
+  Category: 'Elevator' | 'Generator' | 'Water Pump' | 'Fire Safety' | 'CCTV & Gate' | 'Gym Equipment' | 'Solar Panel' | string;
+  Location?: string;
+  PurchaseDate?: string;
+  WarrantyExpiry?: string;
+  AmcVendorId?: string;
+  VendorName?: string;
+  Status: 'operational' | 'under_maintenance' | 'decommissioned';
+  SerialNumber?: string;
+  PurchaseCost?: number;
+  NextServiceDate?: string;
+  LinkedTicketId?: string;
   CreatedAt?: string;
 }
 
@@ -470,6 +519,45 @@ export interface PushToken {
   CreatedAt?: string;
   LastUsedAt?: string;
 }
+
+export interface EmergencyAlert {
+  id: string;
+  SocietyId: string;
+  AlertTitle: string;
+  Message?: string;
+  Severity: 'critical' | 'warning' | 'info';
+  ActiveUntil?: string;
+  CreatedAt: string;
+  CreatedBy?: string;
+}
+
+export interface VendorContract {
+  id: string;
+  SocietyId: string;
+  VendorName: string;
+  ServiceType: string;
+  ContractStartDate: string;
+  ContractEndDate: string;
+  ContactEmail: string;
+  ContactPhone: string;
+  AnnualValue: number;
+  Status: 'Active' | 'Expiring Soon' | 'Expired' | 'Renewed';
+}
+
+export interface AppNotification {
+  id: string;
+  SocietyId: string;
+  UserId?: string;
+  FlatNo?: string;
+  Title: string;
+  Message: string;
+  Type: 'gate' | 'notice' | 'billing' | 'emergency' | 'system';
+  IsRead: boolean;
+  CreatedAt: string;
+  ActionUrl?: string;
+  Metadata?: Record<string, any>;
+}
+
 
 
 

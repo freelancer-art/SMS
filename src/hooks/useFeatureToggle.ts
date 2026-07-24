@@ -8,7 +8,10 @@ export const DEFAULT_ENABLED_MODULES: EnabledModules = {
   facility_booking: false,
   water_meters: true,
   tenants: true,
-  document_vault: true
+  document_vault: true,
+  staff_tracking: true,
+  noc_workflow: true,
+  asset_inventory: true
 };
 
 /**

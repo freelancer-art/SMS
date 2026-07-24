@@ -4,7 +4,7 @@
 ---
 
 ## 📌 Executive Summary
-The Smart Co-op Housing Society SaaS Platform provides extensive configurability across multi-tenant society settings, billing engines, module activation catalogs, and role-based permissions. This document specifies every configurable parameter across all platform domains.
+The Smart Co-op Housing Society SaaS Platform provides extensive configurability across multi-tenant society settings, billing engines, module activation catalogs, staff tracking, NOC clearance workflows, asset inventory management, notification triggers, and role-based permissions. This document specifies every configurable parameter across all platform domains.
 
 ---
 
@@ -48,7 +48,11 @@ Tenant societies can enable or disable functional modules individually via the `
   "facility_booking": true,
   "water_meters": true,
   "tenants": true,
-  "document_vault": true
+  "document_vault": true,
+  "staff_tracking": true,
+  "noc_clearance": true,
+  "asset_inventory": true,
+  "emergency_alerts": true
 }
 ```
 
@@ -56,14 +60,18 @@ Tenant societies can enable or disable functional modules individually via the `
 
 | Module Key | Display Name | Impact when Enabled (`true`) | Impact when Disabled (`false`) |
 | :--- | :--- | :--- | :--- |
-| `gatekeeper` | Gatekeeper Security | Exposes Gate Kiosk, QR Passes, & Visitor Push Alerts. | Hides Gate Kiosk tab & blocks visitor check-in APIs. |
-| `billing` | Financial Billing | Enables Batch Invoicing, Ledger, & Payment Gateways. | Restricts billing write operations to Admins. |
+| `gatekeeper` | Gatekeeper Security | Exposes Gate Kiosk, QR Pass Scanner, & Visitor Push Alerts. | Hides Gate Kiosk tab & blocks visitor check-in APIs. |
+| `billing` | Financial Billing | Enables Batch Invoicing, Ledger, & Printable PDF Receipts. | Restricts billing write operations to Admins. |
 | `helpdesk` | Complaint Helpdesk | Residents can log plumbing, electrical, & elevator tickets. | Disables ticket submission form. |
 | `voting` | AGM Resolution Voting | Enables E-Voting polls with 1-Flat = 1-Vote enforcement. | Blocks ballot submissions with HTTP 403 error. |
 | `facility_booking` | Amenity Reservations | Allows booking Clubhouse, Tennis Court, & Party Hall. | Disables amenity scheduling calendar. |
 | `water_meters` | Sub-Meter Water Billing | Allows entering water readings & automated line charges. | Hides water meter entry screens. |
 | `tenants` | Tenant KYC Register | Digital lease agreement uploads & move-in approvals. | Restricts tenant onboarding forms. |
 | `document_vault` | Society Document Center | Secure repository for audit reports, circulars, & minutes. | Disables document upload center. |
+| `staff_tracking` | Domestic Staff Tracking | Enables passcode gate check-in, directory, & attendance logs for maids, cooks, and drivers. | Hides staff directory and gate check-in tab. |
+| `noc_clearance` | NOC & Move Clearance | Enables move-in/out NOC applications, Treasurer clearance, & refundable deposit tracking. | Hides NOC application form. |
+| `asset_inventory` | Asset & AMC Register | Tracks society elevators, generators, water pumps, warranty dates, & AMC renewals. | Hides asset inventory tab. |
+| `emergency_alerts` | Emergency Alert System | High-visibility sticky top alert banner on resident home view and SOS dial directory. | Disables top emergency banner. |
 
 ---
 
@@ -103,6 +111,29 @@ Tenant societies can enable or disable functional modules individually via the `
 }
 ```
 
+### 4.4 Domestic Staff & NOC Settings
+```json
+"staff_tracking": {
+  "requireGatePasscode": true,
+  "allowResidentPasscodeView": true,
+  "maxAssignedFlatsPerStaff": 10
+},
+"noc_clearance": {
+  "defaultMoveInDeposit": 5000.00,
+  "requireTreasurerDuesClearance": true,
+  "requireSecretarySignature": true
+}
+```
+
+### 4.5 Asset AMC & Warranty Settings
+```json
+"asset_inventory": {
+  "amcExpiryNoticeDays": 30,
+  "autoDispatchExpiryAlerts": true,
+  "requireDualApprovalForMaintenance": true
+}
+```
+
 ---
 
 ## 5. Committee Role Permissions Matrix
@@ -119,6 +150,9 @@ export type PermissionKey =
   | 'helpdesk:read' | 'helpdesk:write' | 'helpdesk:file'
   | 'amenities:read' | 'amenities:write' | 'amenities:book'
   | 'tenants:read' | 'tenants:write'
+  | 'staff:read' | 'staff:write'
+  | 'noc:read' | 'noc:write' | 'noc:approve'
+  | 'assets:read' | 'assets:write'
   | 'committee:read' | 'committee:write'
   | 'settings:read' | 'settings:write'
   | 'expenses:read' | 'expenses:write'

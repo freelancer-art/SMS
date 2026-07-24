@@ -72,6 +72,10 @@ export class MockDatabaseStore {
   public vehicles: Map<string, any> = new Map();
   public assetsAMC: Map<string, any> = new Map();
   public expenses: Map<string, any> = new Map();
+  public staff: Map<string, any> = new Map();
+  public staffAttendance: Map<string, any> = new Map();
+  public nocRequests: Map<string, any> = new Map();
+  public inventoryAssets: Map<string, any> = new Map();
 
   private constructor() {
     this.reset();
@@ -98,6 +102,10 @@ export class MockDatabaseStore {
     this.vehicles.clear();
     this.assetsAMC.clear();
     this.expenses.clear();
+    this.staff.clear();
+    this.staffAttendance.clear();
+    this.nocRequests.clear();
+    this.inventoryAssets.clear();
 
     // Seed default testing data
     this.societies.set(MOCK_SOCIETY_A.id, { ...MOCK_SOCIETY_A });

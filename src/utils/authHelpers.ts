@@ -184,13 +184,18 @@ export function provisionUserAccount(params: {
   phone?: string;
   roleId: string;
   societyId: string;
+  societyName?: string;
+  recipientName?: string;
   isSuperAdmin?: boolean;
   tempPassword?: string;
   existingAuths?: UserAuth[];
-}): { userAuth: UserAuth; tempPassword: string; notification: DispatchedNotification } {
+}): { userAuth: UserAuth; tempPassword: string; notification: DispatchedNotification; societySlug: string } {
   const salt = generateSalt();
   const tempPassword = params.tempPassword || generateTempPassword();
   const passwordHash = hashPassword(tempPassword, salt);
+  const societyName = params.societyName || 'Housing Society';
+  const recipientName = params.recipientName || params.emailOrPhone.split('@')[0];
+  const societySlug = generateSocietySlug(societyName);
 
   const userAuth: UserAuth = {
     id: `Auth-${params.societyId}-${generateRandomString(8)}`,
@@ -207,5 +212,14 @@ export function provisionUserAccount(params: {
     LastLoginAt: undefined
   };
 
-  return { userAuth, tempPassword, notification: null as any };
+  const notification = dispatchWelcomeNotification({
+    recipientName,
+    recipientEmail: params.emailOrPhone.includes('@') ? params.emailOrPhone : undefined,
+    recipientPhone: params.phone || (!params.emailOrPhone.includes('@') ? params.emailOrPhone : undefined),
+    societyName,
+    tempPassword,
+    loginMethod: 'EmailTempPass'
+  });
+
+  return { userAuth, tempPassword, notification, societySlug };
 }

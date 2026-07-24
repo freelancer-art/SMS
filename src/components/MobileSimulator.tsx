@@ -60,6 +60,8 @@ import {
   FileSpreadsheet,
   Vote,
   QrCode,
+  FileCheck,
+  Package,
 } from "lucide-react";
 import {
   BarChart,
@@ -102,7 +104,10 @@ import {
   Vendor,
   UserConsent,
   PushToken,
+  EmergencyAlert,
+  VendorContract,
 } from "../types";
+import EmergencyAlertBanner from "./EmergencyAlertBanner";
 import {
   hashPassword,
   generateSalt,
@@ -118,6 +123,9 @@ import FacilityBookingManager from "./FacilityBookingManager";
 import SetupChecklist from "./SetupChecklist";
 import FeatureCatalogModal from "./FeatureCatalogModal";
 import HowToHelpDrawer from "./HowToHelpDrawer";
+import StaffTrackingModule from "./StaffTrackingModule";
+import NocWorkflowModule from "./NocWorkflowModule";
+import AssetInventoryModule from "./AssetInventoryModule";
 
 interface MobileSimulatorProps {
   members: Member[];
@@ -258,6 +266,12 @@ interface MobileSimulatorProps {
   onAddUserConsent?: (consent: Omit<UserConsent, "id">) => void;
   pushTokens?: PushToken[];
   onAddPushToken?: (token: Omit<PushToken, "id">) => void;
+  onPrintInvoice?: (invoice: Invoice) => void;
+  emergencyAlerts?: EmergencyAlert[];
+  vendorContracts?: VendorContract[];
+  onAddEmergencyAlert?: (alert: Omit<EmergencyAlert, "id" | "CreatedAt">) => void;
+  onOpenQrScanner?: () => void;
+  onOpenVendorContracts?: () => void;
   theme?: "light" | "dark";
 }
 
@@ -347,6 +361,12 @@ export default function MobileSimulator({
   onAddUserConsent,
   pushTokens = [],
   onAddPushToken,
+  onPrintInvoice,
+  emergencyAlerts = [],
+  vendorContracts = [],
+  onAddEmergencyAlert,
+  onOpenQrScanner,
+  onOpenVendorContracts,
   theme = "dark",
 }: MobileSimulatorProps) {
   const isDark = theme === "dark";
@@ -539,6 +559,13 @@ export default function MobileSimulator({
     assetAMC: false,
     parkingRegister: true,
     documentVault: true,
+  };
+
+  const enabledModules: Record<string, boolean> = {
+    staff_tracking: activeFeatures.staff_tracking ?? true,
+    noc_workflow: activeFeatures.noc_workflow ?? true,
+    asset_inventory: activeFeatures.asset_inventory ?? true,
+    ...(activeSocietyObj?.FeaturesEnabled as unknown as Record<string, boolean> || {}),
   };
 
   const handleZoomChange = (scale: number) => {
@@ -3126,6 +3153,10 @@ export default function MobileSimulator({
                     {/* ----------------- TABS: DASHBOARD ----------------- */}
                     {currentTab === "dashboard" && (
                       <div className="space-y-3 pb-4 animate-fade-in">
+                        {/* Emergency Alert Banner */}
+                        <EmergencyAlertBanner
+                          alerts={emergencyAlerts.filter(a => !a.SocietyId || a.SocietyId === activeSocietyId)}
+                        />
                         {/* Society Profile Card */}
                         <div className="bg-gradient-to-br from-slate-900 to-purple-950 text-white p-3 py-2.5 rounded-xl shadow-sm border border-purple-950/20 relative overflow-hidden">
                           <div className="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-[0.06] pointer-events-none">
@@ -4729,9 +4760,21 @@ export default function MobileSimulator({
                                     Simulate check-ins at the security cabin
                                   </p>
                                 </div>
-                                <span className="text-[7px] font-black bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wide">
-                                  Active Terminal
-                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {onOpenQrScanner && (
+                                    <button
+                                      type="button"
+                                      onClick={onOpenQrScanner}
+                                      className="px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[8.5px] font-black tracking-wide flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+                                    >
+                                      <QrCode className="w-3 h-3" />
+                                      <span>QR Scanner</span>
+                                    </button>
+                                  )}
+                                  <span className="text-[7px] font-black bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100 uppercase tracking-wide">
+                                    Active Terminal
+                                  </span>
+                                </div>
                               </div>
 
                               {/* Quick Check-in form */}
@@ -5529,6 +5572,17 @@ export default function MobileSimulator({
                                           {inv.Status}
                                         </span>
                                       </div>
+
+                                       {onPrintInvoice && (
+                                        <button
+                                          type="button"
+                                          onClick={() => onPrintInvoice(inv)}
+                                          title="Print / Download Tax Invoice & Official Receipt"
+                                          className="p-1 bg-slate-200 hover:bg-purple-100 text-slate-700 hover:text-purple-700 rounded-lg transition-colors cursor-pointer"
+                                        >
+                                          <Printer className="w-3.5 h-3.5" />
+                                        </button>
+                                      )}
 
                                       {inv.Status === "Unpaid" &&
                                         userRole === "Member" && (
@@ -8903,6 +8957,50 @@ export default function MobileSimulator({
                     )}
                   </div>
 
+                  {/* ----------------- TAB: STAFF & MAID TRACKING ----------------- */}
+                  {currentTab === "staff_tracking" && (
+                    <div className="space-y-3 animate-fade-in">
+                      <StaffTrackingModule
+                        enabledModules={enabledModules}
+                        staffList={staffList}
+                        staffAttendanceList={staffAttendanceList}
+                        onAddStaff={onAddStaff}
+                        onCheckIn={onStaffCheckIn}
+                        onCheckOut={onStaffCheckOut}
+                        isDark={isDark}
+                      />
+                    </div>
+                  )}
+
+                  {/* ----------------- TAB: MOVE-IN / MOVE-OUT NOC WORKFLOW ----------------- */}
+                  {currentTab === "noc" && (
+                    <div className="space-y-3 animate-fade-in">
+                      <NocWorkflowModule
+                        activeSocietyId={activeSocietyId}
+                        userRole={userRole}
+                        userEmail={loggedInUserEmail}
+                        loggedInMemberFlat={loggedInMemberFlat}
+                        members={members}
+                        enabledModules={enabledModules}
+                        isDark={isDark}
+                        societyName={activeSocietyObj?.Name || "Society"}
+                      />
+                    </div>
+                  )}
+
+                  {/* ----------------- TAB: ASSET & INVENTORY REGISTER ----------------- */}
+                  {currentTab === "assets" && (
+                    <div className="space-y-3 animate-fade-in">
+                      <AssetInventoryModule
+                        activeSocietyId={activeSocietyId}
+                        userRole={userRole}
+                        enabledModules={enabledModules}
+                        isDark={isDark}
+                        societyName={activeSocietyObj?.Name || "Society"}
+                      />
+                    </div>
+                  )}
+
                   {/* Bottom Navigation Tabs */}
                   <div
                     className={`h-[56px] border-t flex items-center gap-1 overflow-x-auto px-1 py-1 z-30 scrollbar-none transition-colors ${
@@ -9080,6 +9178,46 @@ export default function MobileSimulator({
                         Vendors
                       </span>
                     </button>
+
+                    {enabledModules.noc_workflow !== false && (
+                      <button
+                        onClick={() => setCurrentTab("noc")}
+                        className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                          currentTab === "noc"
+                            ? isDark
+                              ? "text-blue-400 font-extrabold"
+                              : "text-blue-600 font-extrabold"
+                            : isDark
+                              ? "text-slate-400 hover:text-slate-200"
+                              : "text-slate-400 hover:text-slate-600"
+                        }`}
+                      >
+                        <FileCheck className="w-4 h-4" />
+                        <span className="text-[8px] whitespace-nowrap">
+                          NOC
+                        </span>
+                      </button>
+                    )}
+
+                    {enabledModules.asset_inventory !== false && (
+                      <button
+                        onClick={() => setCurrentTab("assets")}
+                        className={`flex flex-col items-center gap-0.5 min-w-[52px] py-1 cursor-pointer transition-colors ${
+                          currentTab === "assets"
+                            ? isDark
+                              ? "text-amber-400 font-extrabold"
+                              : "text-amber-600 font-extrabold"
+                            : isDark
+                              ? "text-slate-400 hover:text-slate-200"
+                              : "text-slate-400 hover:text-slate-600"
+                        }`}
+                      >
+                        <Package className="w-4 h-4" />
+                        <span className="text-[8px] whitespace-nowrap">
+                          Assets
+                        </span>
+                      </button>
+                    )}
 
                     {userRole === "Admin" ? (
                       <>

@@ -229,6 +229,24 @@ export default function SocietyModuleSettings({
                 title: 'Document Vault & Bylaws Repository',
                 desc: 'Store society conveyance deeds, AGM minutes, audit reports & resident forms.',
                 icon: '📂'
+              },
+              {
+                key: 'staff_tracking' as keyof EnabledModules,
+                title: 'Staff & Maid Attendance Tracking',
+                desc: 'Guard QR check-in scan, resident live staff status, gate passes & monthly logs.',
+                icon: '👮'
+              },
+              {
+                key: 'noc_workflow' as keyof EnabledModules,
+                title: 'Move-In / Move-Out NOC Workflow',
+                desc: 'Sequential Treasurer & Secretary approval queue, shift dates & PDF NOC issuance.',
+                icon: '📦'
+              },
+              {
+                key: 'asset_inventory' as keyof EnabledModules,
+                title: 'Asset & Inventory Register',
+                desc: 'Track elevators, generators, pumps, warranty expiries, AMC vendors & helpdesk links.',
+                icon: '🏢'
               }
             ].map((item) => {
               const isEnabled = enabledModules[item.key];

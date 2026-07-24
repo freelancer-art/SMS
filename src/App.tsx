@@ -19,7 +19,7 @@ import {
   Lock,
   Smartphone
 } from 'lucide-react';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken, GranularRoleName } from './types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken, GranularRoleName, AppNotification, EmergencyAlert, VendorContract } from './types';
 import { 
   MULTI_TENANT_MEMBERS, 
   MULTI_TENANT_PAYMENTS, 
@@ -44,13 +44,22 @@ import {
   INITIAL_STAFF_ATTENDANCE,
   INITIAL_VENDORS,
   INITIAL_USER_CONSENTS,
-  INITIAL_PUSH_TOKENS
+  INITIAL_PUSH_TOKENS,
+  INITIAL_NOTIFICATIONS,
+  INITIAL_EMERGENCY_ALERTS,
+  INITIAL_VENDOR_CONTRACTS
 } from './data/mockData';
 import { hashPassword, generateSalt, generateVisitorAccessToken } from './utils/security';
 import CommitteeManagement from './components/CommitteeManagement';
 import SocietyModuleSettings from './components/SocietyModuleSettings';
 import ForcedPasswordResetModal from './components/ForcedPasswordResetModal';
 import CredentialDeliveryLogModal from './components/CredentialDeliveryLogModal';
+import NotificationBell from './components/NotificationBell';
+import NotificationCenterModal from './components/NotificationCenterModal';
+import InvoicePrintModal from './components/InvoicePrintModal';
+import EmergencyAlertBanner from './components/EmergencyAlertBanner';
+import GatekeeperQrScannerModal from './components/GatekeeperQrScannerModal';
+import VendorContractManagementModal from './components/VendorContractManagementModal';
 import { provisionUserAccount, dispatchWelcomeNotification, generateTempPassword } from './utils/authHelpers';
 import { crashReporter } from './utils/logger';
 import MobileSimulator from './components/MobileSimulator';
@@ -217,7 +226,95 @@ export default function App() {
   const [vendorList, setVendorList] = useState<Vendor[]>([]);
   const [userConsents, setUserConsents] = useState<UserConsent[]>([]);
   const [pushTokens, setPushTokens] = useState<PushToken[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    const local = localStorage.getItem('society_notifications');
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_NOTIFICATIONS;
+  });
+
+  const [emergencyAlerts, setEmergencyAlerts] = useState<EmergencyAlert[]>(() => {
+    const local = localStorage.getItem('society_emergency_alerts');
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_EMERGENCY_ALERTS;
+  });
+
+  const [vendorContracts, setVendorContracts] = useState<VendorContract[]>(() => {
+    const local = localStorage.getItem('society_vendor_contracts');
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return INITIAL_VENDOR_CONTRACTS;
+  });
+
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const [showVendorContractsModal, setShowVendorContractsModal] = useState(false);
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+  const [selectedPrintInvoice, setSelectedPrintInvoice] = useState<Invoice | null>(null);
   const [lastSynced, setLastSynced] = useState<string>(() => localStorage.getItem('society_last_synced') || '');
+
+  const handleAddEmergencyAlert = (alertData: Omit<EmergencyAlert, 'id' | 'CreatedAt'>) => {
+    const newAlert: EmergencyAlert = {
+      ...alertData,
+      id: `ALERT-${Date.now()}`,
+      CreatedAt: new Date().toISOString()
+    };
+    const updated = [newAlert, ...emergencyAlerts];
+    setEmergencyAlerts(updated);
+    localStorage.setItem('society_emergency_alerts', JSON.stringify(updated));
+
+    // Also trigger system notification
+    const notif: AppNotification = {
+      id: `NOTIF-${Date.now()}`,
+      SocietyId: alertData.SocietyId,
+      Title: alertData.AlertTitle,
+      Message: alertData.Message || 'Emergency alert published by society committee.',
+      Type: 'emergency',
+      IsRead: false,
+      CreatedAt: new Date().toISOString()
+    };
+    updateNotificationsState([notif, ...notifications]);
+  };
+
+  const handleAddVendorContract = (contractData: Omit<VendorContract, 'id'>) => {
+    const newContract: VendorContract = {
+      ...contractData,
+      id: `VC-${Date.now()}`
+    };
+    const updated = [newContract, ...vendorContracts];
+    setVendorContracts(updated);
+    localStorage.setItem('society_vendor_contracts', JSON.stringify(updated));
+  };
+
+  const handleSendVendorRenewalReminder = (contract: VendorContract) => {
+    const notif: AppNotification = {
+      id: `NOTIF-AMC-${Date.now()}`,
+      SocietyId: contract.SocietyId,
+      Title: `⏰ Contract Renewal Reminder: ${contract.VendorName}`,
+      Message: `Contract for ${contract.ServiceType} expires on ${contract.ContractEndDate}. Contact email: ${contract.ContactEmail}`,
+      Type: 'emergency',
+      IsRead: false,
+      CreatedAt: new Date().toISOString()
+    };
+    updateNotificationsState([notif, ...notifications]);
+  };
+
+  const updateNotificationsState = (list: AppNotification[]) => {
+    setNotifications(list);
+    localStorage.setItem('society_notifications', JSON.stringify(list));
+  };
 
   const updateUserConsentsState = (list: UserConsent[]) => {
     setUserConsents(list);
@@ -400,6 +497,50 @@ export default function App() {
       syncWithSupabase(savedUrl, savedKey, true);
     }
   }, []);
+
+  // Automated dashboard notification trigger for AMC / Warranty expiring within 30 days
+  useEffect(() => {
+    if (!assetAMCs || assetAMCs.length === 0) return;
+
+    const now = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(now.getDate() + 30);
+
+    const newExpiringNotifs: AppNotification[] = [];
+
+    assetAMCs.forEach(amc => {
+      const expiryStr = (amc as any).warranty_expiry || (amc as any).WarrantyExpiryDate || amc.ContractExpiryDate;
+      if (!expiryStr) return;
+
+      const expiryDate = new Date(expiryStr);
+      if (isNaN(expiryDate.getTime())) return;
+
+      if (expiryDate <= thirtyDaysFromNow) {
+        const notifId = `NOTIF-AMC-EXPIRY-${amc.id}`;
+        const alreadyExists = notifications.some(n => n.id === notifId || n.Title?.includes(amc.AssetName));
+
+        if (!alreadyExists) {
+          const daysLeft = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          const daysMsg = daysLeft < 0 ? `expired ${Math.abs(daysLeft)} days ago` : `expires in ${daysLeft} days`;
+
+          newExpiringNotifs.push({
+            id: notifId,
+            SocietyId: amc.SocietyId || activeSocietyId,
+            Title: `⚠️ AMC/Warranty Expiry Alert: ${amc.AssetName}`,
+            Message: `High Priority: The AMC contract or warranty for ${amc.AssetName} (${amc.VendorName}) ${daysMsg} (${expiryStr}). Please renew with vendor.`,
+            Type: 'emergency',
+            IsRead: false,
+            CreatedAt: new Date().toISOString(),
+            Metadata: { Priority: 'High', TargetRole: 'SOCIETY_ADMIN' }
+          });
+        }
+      }
+    });
+
+    if (newExpiringNotifs.length > 0) {
+      updateNotificationsState([...newExpiringNotifs, ...notifications]);
+    }
+  }, [assetAMCs, activeSocietyId]);
 
   // Caching TTL & Background Sync Settings
   const lastSyncTimestampRef = useRef<number>(0);
@@ -2893,6 +3034,82 @@ export default function App() {
     }
   };
 
+  // Notification Dispatch & Management Handlers
+  const handleMarkNotificationAsRead = (id: string) => {
+    const updated = notifications.map(n => n.id === id ? { ...n, IsRead: true } : n);
+    updateNotificationsState(updated);
+  };
+
+  const handleMarkAllNotificationsAsRead = () => {
+    const updated = notifications.map(n => ({ ...n, IsRead: true }));
+    updateNotificationsState(updated);
+  };
+
+  const handleClearNotification = (id: string) => {
+    const updated = notifications.filter(n => n.id !== id);
+    updateNotificationsState(updated);
+  };
+
+  const handleClearAllNotifications = () => {
+    updateNotificationsState([]);
+  };
+
+  const handleSendSimulatedNotification = (type: 'gate' | 'notice' | 'billing' | 'emergency') => {
+    let title = '';
+    let message = '';
+    let metadata: Record<string, any> = {};
+
+    switch (type) {
+      case 'gate':
+        title = '🚨 Visitor Arrival Alert';
+        message = 'Swiggy Delivery Partner (Ramesh) is at Main Gate for Flat 101.';
+        metadata = { visitorName: 'Ramesh', purpose: 'Delivery', flatNo: '101' };
+        break;
+      case 'billing':
+        title = '💳 Payment Receipt & Invoice Update';
+        message = 'Payment of ₹3,975 for Invoice INV-202607-101 has been verified.';
+        metadata = { invoiceNo: 'INV-202607-101', amount: 3975 };
+        break;
+      case 'notice':
+        title = '📢 Society Circular Published';
+        message = 'Clubhouse Gym Maintenance scheduled for this coming Saturday.';
+        metadata = { noticeId: `N-${Date.now()}` };
+        break;
+      case 'emergency':
+        title = '⚠️ Elevator AMC Inspection';
+        message = 'Tower A Lift 2 undergoing preventive wire rope inspection till 4 PM.';
+        metadata = { asset: 'Tower A Lift 2' };
+        break;
+    }
+
+    const newNotif: AppNotification = {
+      id: `NOTIF-${Date.now()}`,
+      SocietyId: activeSocietyId,
+      Title: title,
+      Message: message,
+      Type: type,
+      IsRead: false,
+      CreatedAt: new Date().toISOString(),
+      Metadata: metadata
+    };
+
+    updateNotificationsState([newNotif, ...notifications]);
+  };
+
+  // Protected Route Guard: Mandatory Password Reset Interceptor
+  if (currentUserAuth && currentUserAuth.MustChangePassword) {
+    return (
+      <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex items-center justify-center p-4 transition-colors duration-300`}>
+        <ForcedPasswordResetModal
+          userAuth={currentUserAuth}
+          societyName={activeSociety?.Name || 'Housing Society'}
+          onPasswordUpdated={handlePasswordUpdated}
+          theme={theme}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans overflow-hidden transition-colors duration-300`}>
       {/* Immersive Onboarding Setup Wizard Overlay */}
@@ -2904,16 +3121,6 @@ export default function App() {
             theme={theme}
           />
         </div>
-      )}
-
-      {/* Forced Password Reset Interceptor Modal */}
-      {currentUserAuth && currentUserAuth.MustChangePassword && (
-        <ForcedPasswordResetModal
-          userAuth={currentUserAuth}
-          societyName={activeSociety.Name}
-          onPasswordUpdated={handlePasswordUpdated}
-          theme={theme}
-        />
       )}
 
       {/* Credential Delivery & Welcome Audit Log Modal */}
@@ -3123,6 +3330,12 @@ export default function App() {
             <span>Credential Delivery Log</span>
           </button>
 
+          <NotificationBell
+            notifications={notifications}
+            onClick={() => setShowNotificationCenter(true)}
+            theme={theme}
+          />
+
           <button
             onClick={toggleTheme}
             id="theme-toggle-btn"
@@ -3265,6 +3478,12 @@ export default function App() {
             activeSocietyId={activeSocietyId}
             onChangeActiveSociety={(id) => { setActiveSocietyId(id); localStorage.setItem('active_society_id', id); }}
             onCreateSociety={handleCreateSociety}
+            onPrintInvoice={(inv) => setSelectedPrintInvoice(inv)}
+            emergencyAlerts={emergencyAlerts}
+            vendorContracts={vendorContracts}
+            onAddEmergencyAlert={handleAddEmergencyAlert}
+            onOpenQrScanner={() => setShowQrScanner(true)}
+            onOpenVendorContracts={() => setShowVendorContractsModal(true)}
             theme={theme}
           />
 
@@ -3485,6 +3704,30 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* Real-Time Push Notification Center Drawer */}
+      <NotificationCenterModal
+        isOpen={showNotificationCenter}
+        onClose={() => setShowNotificationCenter(false)}
+        notifications={notifications}
+        onMarkAsRead={handleMarkNotificationAsRead}
+        onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+        onClearNotification={handleClearNotification}
+        onClearAll={handleClearAllNotifications}
+        onSendSimulatedNotification={handleSendSimulatedNotification}
+        theme={theme}
+      />
+
+      {/* Printable Tax Invoice & Receipt Modal */}
+      <InvoicePrintModal
+        isOpen={!!selectedPrintInvoice}
+        onClose={() => setSelectedPrintInvoice(null)}
+        invoice={selectedPrintInvoice}
+        society={activeSociety}
+        member={members.find(m => m.FlatNo === selectedPrintInvoice?.FlatNo && m.SocietyId === selectedPrintInvoice?.SocietyId)}
+        payment={payments.find(p => p.InvoiceNo === selectedPrintInvoice?.id || p.FlatNo === selectedPrintInvoice?.FlatNo)}
+        theme={theme}
+      />
 
       {/* Mini Info Footer - Hidden on Mobile */}
       <footer className={`hidden lg:block ${theme === 'dark' ? 'bg-slate-950 border-slate-900 text-slate-500' : 'bg-white border-slate-200 text-slate-400 shadow-inner'} py-3.5 px-6 border-t text-center text-[11px] font-medium flex-shrink-0 transition-colors duration-300`}>

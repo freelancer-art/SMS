@@ -18,7 +18,10 @@ describe('05 - Tenant Discretion Feature Toggles & Committee RBAC', () => {
       facility_booking: false,
       water_meters: true,
       tenants: true,
-      document_vault: true
+      document_vault: true,
+      staff_tracking: true,
+      noc_workflow: true,
+      asset_inventory: false
     }
   };
 
@@ -27,6 +30,9 @@ describe('05 - Tenant Discretion Feature Toggles & Committee RBAC', () => {
     expect(isModuleEnabled('billing', mockSociety)).toBe(true);
     expect(isModuleEnabled('voting', mockSociety)).toBe(false);
     expect(isModuleEnabled('facility_booking', mockSociety)).toBe(false);
+    expect(isModuleEnabled('staff_tracking', mockSociety)).toBe(true);
+    expect(isModuleEnabled('noc_workflow', mockSociety)).toBe(true);
+    expect(isModuleEnabled('asset_inventory', mockSociety)).toBe(false);
   });
 
   test('Should grant SOCIETY_ADMIN full permissions across all modules', () => {
