@@ -131,6 +131,19 @@ export async function clearCompletedOfflineOperations(): Promise<void> {
   window.dispatchEvent(new CustomEvent('society_offline_queue_updated'));
 }
 
+export async function removeQueuedOperation(id: string): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    store.delete(id);
+    await new Promise((res) => (tx.oncomplete = res));
+  } catch {
+    const queue = getLocalStorageQueue().filter(o => o.id !== id);
+    saveLocalStorageQueue(queue);
+  }
+}
+
 /**
  * Flush and sync all pending queued operations
  */
@@ -148,6 +161,7 @@ export async function syncOfflineQueue(
       const success = await syncHandler(op);
       if (success) {
         syncedCount++;
+        await removeQueuedOperation(op.id);
       } else {
         failedCount++;
       }

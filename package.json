@@ -13,6 +13,7 @@
     "test:negative": "jest tests/02-negative",
     "test:security": "jest tests/03-security",
     "test:performance": "jest tests/04-performance",
+    "test:chaos": "jest tests/09-chaos-stress",
     "test:all": "jest"
   },
   "dependencies": {
