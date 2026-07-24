@@ -3334,6 +3334,10 @@ export default function App() {
             notifications={notifications}
             onClick={() => setShowNotificationCenter(true)}
             theme={theme}
+            supabaseUrl={supabaseUrl}
+            supabaseAnonKey={supabaseAnonKey}
+            societyId={activeSocietyId}
+            onNewRealtimeNotification={(newNotif) => setNotifications(prev => [newNotif, ...prev])}
           />
 
           <button
