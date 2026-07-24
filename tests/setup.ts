@@ -66,6 +66,12 @@ export class MockDatabaseStore {
   public polls: Map<string, any> = new Map();
   public pollVotes: Map<string, any> = new Map();
   public payments: Map<string, any> = new Map();
+  public waterMeters: Map<string, any> = new Map();
+  public tenants: Map<string, any> = new Map();
+  public facilityBookings: Map<string, any> = new Map();
+  public vehicles: Map<string, any> = new Map();
+  public assetsAMC: Map<string, any> = new Map();
+  public expenses: Map<string, any> = new Map();
 
   private constructor() {
     this.reset();
@@ -86,6 +92,12 @@ export class MockDatabaseStore {
     this.polls.clear();
     this.pollVotes.clear();
     this.payments.clear();
+    this.waterMeters.clear();
+    this.tenants.clear();
+    this.facilityBookings.clear();
+    this.vehicles.clear();
+    this.assetsAMC.clear();
+    this.expenses.clear();
 
     // Seed default testing data
     this.societies.set(MOCK_SOCIETY_A.id, { ...MOCK_SOCIETY_A });

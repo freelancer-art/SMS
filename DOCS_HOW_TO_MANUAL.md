@@ -1,191 +1,207 @@
-# Housing Society SaaS Platform — How-To & Configuration Manual
-*Official Operational & Deployment Standard Operating Procedure (SOP)*
+# Smart Co-op Housing Society SaaS Platform — Master Operational Manual & SOP
+*Official Standard Operating Procedure (SOP), System Architecture, and Administration Guide*
 
 ---
 
 ## 📋 Table of Contents
-1. [Phase 1: Society Registration & Initial Onboarding](#phase-1-society-registration--initial-onboarding)
-2. [Phase 2: Feature Activation & Module Management](#phase-2-feature-activation--module-management)
-3. [Phase 3: Daily & Monthly Operational Workflows](#phase-3-daily--monthly-operational-workflows)
-4. [Phase 4: Troubleshooting, Errors & Solutions Matrix](#phase-4-troubleshooting-errors--solutions-matrix)
+1. [System Overview & Multi-Tenant Discretion Paradigm](#1-system-overview--multi-tenant-discretion-paradigm)
+2. [Phase 1: Society Onboarding & Disambiguation](#phase-1-society-onboarding--disambiguation)
+3. [Phase 2: Committee Governance & Granular RBAC Permissions](#phase-2-committee-governance--granular-rbac-permissions)
+4. [Phase 3: Module Settings Catalog & Tenant Discretion Toggles](#phase-3-module-settings-catalog--tenant-discretion-toggles)
+5. [Phase 4: Master Configurable Items Reference Matrix](#phase-4-master-configurable-items-reference-matrix)
+6. [Phase 5: Daily & Monthly Operational Workflows](#phase-5-daily--monthly-operational-workflows)
+7. [Phase 6: Automated Test Suites & Security Boundaries](#phase-6-automated-test-suites--security-boundaries)
+8. [Phase 7: Comprehensive Troubleshooting & Error Resolution Matrix](#phase-7-comprehensive-troubleshooting--error-resolution-matrix)
 
 ---
 
-## Phase 1: Society Registration & Initial Onboarding
+## 1. System Overview & Multi-Tenant Discretion Paradigm
+
+The Smart Co-op Housing Society SaaS Platform is a multi-tenant enterprise management system built for residential housing societies, apartment complexes, and commercial gated communities. 
+
+### Core Architectural Pillars
+- **Strict Multi-Tenant Isolation**: Row-Level Security (RLS) policies in PostgreSQL enforce tenant boundary safety across all queries and operations (`SocietyId` partition key).
+- **Discretionary Module Catalog**: Tenant societies can toggle features ON/OFF individually via JSONB configuration settings (`enabled_modules` and `module_settings`).
+- **Granular Role-Based Access Control (RBAC)**: Distinct permissions mapped across 7 standard committee and operational roles.
+- **Forced First-Time Credential Reset**: Mandatory password change gate (`MustChangePassword: true`) for newly provisioned accounts.
+
+---
+
+## Phase 1: Society Onboarding & Disambiguation
 
 ### 1.1 Registering a New Society
-To onboard a new residential or commercial complex onto the SaaS platform, the Managing Committee Administrator must complete the initial society registration wizard:
+To onboard a new residential or commercial complex, the Managing Committee or Super-Admin completes the initial onboarding wizard:
 
-1. **Navigate to Onboarding / Switch Society:** Click on **"Register New Society"** in the top workspace toolbar or login screen.
-2. **Provide Primary Metadata:**
-   - **Society Name:** Official registered name (e.g., *Greenwood Heights Co-Operative Housing Society Ltd.*).
-   - **GSTIN & PAN Number:** Required for tax-compliant invoicing and tax deductions (e.g., `27AAACG1234H1Z5`).
-   - **Postal Address & Pin Code:** Complete physical location for postal circulars and automated invoice headers.
-   - **Registration Number:** District registrar allotment code (e.g., `BOM/HSG/12345/2018`).
-3. **Configure Building & Structural Architecture:**
-   - **Standalone Building:** Single structure without wings.
-   - **Wings / Blocks:** Multi-wing layout (e.g., *Wing A, Wing B, Wing C*).
-   - **Towers & Wings Combined:** High-rise complexes with multiple towers (e.g., *Tower 1 — Wing A, Tower 1 — Wing B*).
-   - **Total Flats Count:** Total unit capacity across all blocks.
+1. **Access Onboarding Wizard**: Click **"Register New Customer (Society)"** in the top workspace toolbar or login screen.
+2. **Input Core Metadata**:
+   - **Society Name**: Registered legal title (e.g. *Om Residency Co-Operative Housing Society Ltd.*).
+   - **GSTIN & PAN**: 15-character statutory GST identification number (e.g. `27AAACG1234H1Z5`).
+   - **Postal Address & Pin Code**: Official physical location (e.g. *Plot 12, Sector 15, Navi Mumbai 400705*).
+   - **Registration Number**: District registrar code (e.g. `MUM/HSG/12345/2021`).
+3. **Configure Structural Layout**:
+   - **Standalone Building**: Single block without wings.
+   - **Wings / Blocks**: Multi-wing configuration (e.g. *Wing A, Wing B, Wing C*).
+   - **Towers & Wings**: High-rise complex with multiple towers (e.g. *Tower 1 — Wing A, Tower 2 — Wing B*).
 
----
+### 1.2 Automated Duplicate Disambiguation Engine
+To prevent credential routing collisions when onboarded societies share identical names (e.g. two separate complexes named *"Om Residency"* in different cities):
 
-### 1.2 Setting Up Committee Roles & Access Hierarchies
-The platform uses **Role-Based Access Control (RBAC)** to enforce operational privacy:
-
-| Role | Operational Scope & Permissions |
-| :--- | :--- |
-| **Admin / Managing Committee** | Full administrative access: Society settings, financial ledgers, member management, audit logs, feature catalog toggles. |
-| **President / Secretary** | Authorization rights: AGM resolution publishing, vendor contracts, official announcements, emergency broadcasts. |
-| **Treasurer / Accountant** | Financial controls: Maintenance bill generation, payment verification, vendor payout approval, GST & audit statement downloads. |
-| **Security Guard / Gatekeeper** | Main gate kiosk interface: Visitor entry/exit logs, delivery verification, cab tracking, emergency panic alarms. |
-| **Resident (Owner / Tenant)** | Mobile/Web portal: Dues payment via UPI/Gateway, visitor pre-approvals, complaint ticketing, amenity booking, e-voting. |
-
-#### To Assign Roles:
-1. Open **Resident Directory** in the Admin Console.
-2. Select the target resident record and click **Edit Role**.
-3. Choose `Admin`, `President`, `Secretary`, `Treasurer`, or `Resident`.
-4. Save record — permissions take effect immediately upon next session refresh.
+1. **Unique SocietyCode Generation**:
+   - Formed by taking the first 4 uppercase characters of the name plus a sequence counter.
+   - *First "Om Residency"* ➔ `OMRE1`
+   - *Second "Om Residency"* ➔ `OMRE2`
+2. **URL Slug Hashing**:
+   - Converts the society name to a URL-safe kebab string appended with a 6-character short hash.
+   - *First "Om Residency"* ➔ `om-residency-a1b2c3`
+   - *Second "Om Residency"* ➔ `om-residency-x9y8z7`
+3. **Primary Admin Account Provisioning**:
+   - Automatically provisions a default `SOCIETY_ADMIN` account assigned to the primary contact email.
+   - Flagged with `MustChangePassword: true` and issued a secure temporary password.
 
 ---
 
-### 1.3 Bulk Resident & Flat Directory Import
-You can populate flat allocations and resident profiles manually or via automated CSV batch import:
+## Phase 2: Committee Governance & Granular RBAC Permissions
 
-#### Option A: CSV Batch Upload
-1. Go to **Admin Console ➔ Resident Directory ➔ Bulk Import CSV**.
-2. Download the standard CSV Template (`society_residents_template.csv`).
-3. Fill in required columns:
-   `FlatNo`, `Wing`, `OwnerName`, `ContactNo`, `Email`, `Status` (`Owner` / `Tenant`), `Floor`, `ParkingSlot`
-4. Upload the CSV file. The system will perform pre-validation checks:
-   - Unique phone number validation
-   - Wing existence check
-   - Flat duplication guard
-5. Click **Confirm Import**.
+The platform enforces Role-Based Access Control across 7 standard role definitions stored in the `Roles` database table:
 
-#### Option B: Manual Registration
-1. Click **+ Add Resident** button.
-2. Input Flat Number, Wing/Tower selection, Primary Owner Name, Phone Number (+91 format), and Email address.
-3. Save record — a login credential SMS/Email invitation is automatically queued for the resident.
+### Role Permissions Matrix
 
----
-
-## Phase 2: Feature Activation & Module Management
-
-### 2.1 Feature Catalog & Module Specification
-The SaaS platform features a modular architecture. Societies only activate the modules they require:
-
-1. **Gatekeeper Security & Visitor Pass:** Real-time gate check-ins, host push notifications, delivery verification, and QR visitor passes.
-2. **Automated Water Meter Billing:** Sub-meter reading entries, tiered volume pricing, and automated line-item inclusion in monthly invoices.
-3. **Facility & Amenity Booking:** Calendar reservations for Clubhouse, Tennis Court, Swimming Pool, and Banquet Hall with online slot payment.
-4. **Digital AGM Resolutions & E-Voting:** Quorum tracking, 1-Flat = 1-Vote enforcement, tamper-proof ballot logs, and real-time result charts.
-5. **Vendor & AMC Management:** Track Annual Maintenance Contracts (lifts, generators, pumps, fire systems) with service due alerts.
-6. **Staff & Maid Directory:** Domestic help registration, gate pass creation, police verification status badges, and attendance logs.
-7. **Tenant & KYC Register:** Digital lease document vault, identity proof verification, and move-in/move-out approval workflows.
-8. **Document Vault:** Central repository for financial audit reports, circulars, bye-laws, and AGM meeting minutes.
-
----
-
-### 2.2 Activating or Deactivating Modules
-Managing Committee Administrators can toggle modules ON or OFF at any time:
-
-1. Click the **Module Settings / Sliders Icon** in the top navigation bar or go to **Admin Console ➔ Module Settings**.
-2. Review active modules in the **Feature Catalog**.
-3. Toggle the desired module **Active** or **Disabled**.
-4. **Impact:**
-   - Toggling **ON** instantly exposes the module's tab and controls in the main navigation menu for all residents and committee members in that society.
-   - Toggling **OFF** hides the module tab and restricts underlying API execution while keeping past historical data securely stored in the database.
-
----
-
-## Phase 3: Daily & Monthly Operational Workflows
-
-### 3.1 Maintenance Calculation Rules & Billing Configuration
-Configure society maintenance rules in **Admin Console ➔ Billing & Financial Engine**:
-
-1. **Select Maintenance Fee Structure:**
-   - **Flat Rate:** Same fixed charge for every flat (e.g., ₹2,500/month).
-   - **Area-Based (Per SqFt):** Charged according to flat square footage (e.g., ₹3.50/sq.ft × 1,200 sq.ft = ₹4,200/month).
-   - **Hybrid / Tiered:** Fixed base fee + sub-meter additions (e.g., Base Maintenance + Water Consumption + Parking Fee).
-2. **Configure Penalty Rules:**
-   - **Due Date:** Default cutoff day of the month (e.g., 10th of every month).
-   - **Grace Period:** Number of grace days before late fee accrues (e.g., 5 days).
-   - **Late Penalty Fee:** Fixed late fee (e.g., ₹200) or interest rate (e.g., 12% per annum pro-rata).
-3. **Save Configuration:** Updates apply to all upcoming batch invoice cycles.
-
----
-
-### 3.2 Automated Monthly Batch Invoicing
-Generate monthly dues across all society flats in 1 click:
-
-1. Go to **Financials ➔ Invoices ➔ Generate Batch Invoices**.
-2. Select Billing Month & Year (e.g., *August 2026*).
-3. System automatically calculates total payable for each flat:
-   $$\text{Total Invoice} = \text{Base Maintenance} + \text{Water Meter Usage} + \text{Parking Fees} + \text{Arrears} - \text{Advance Credits}$$
-4. Review draft ledger preview.
-5. Click **Publish & Broadcast Invoices**.
-6. Invoices are generated, and instant push notifications/emails with direct UPI payment links are dispatched to all residents.
-
----
-
-### 3.3 Gatekeeper Security & Visitor Pass Management
-Ensure robust security at the main entry gates:
-
-1. **Gate Guard Login:** Security guards use the dedicated **Gatekeeper Kiosk** interface logged in under the security guard passcode.
-2. **Walk-in / Delivery Visitor Arrival:**
-   - Guard enters Visitor Name, Mobile Number, Vehicle Number, Purpose (Delivery/Cab/Guest/Service), and Target Flat No.
-   - System triggers a real-time **Expo Push Notification** to the target flat's resident mobile device.
-   - Resident receives popup: *"Delivery partner Amazon at Gate. Approve entry?"*
-   - Resident taps **Approve** ➔ Gatekeeper screen turns green and displays *"Entry Granted"*.
-3. **Pre-Approved Guest Pass:**
-   - Resident opens mobile app ➔ **Add Pre-Approved Guest**.
-   - Generates a 6-digit OTP or QR pass valid for a specific date range.
-   - Guest presents QR/OTP at gate ➔ Guard scans code for instant 1-tap entry without calling the resident.
-
----
-
-### 3.4 Publishing Digital Notices & Launching AGM Polls
-
-#### Publishing Notices:
-1. Navigate to **Notices & Broadcasts ➔ Create Notice**.
-2. Input Title, Category (*Maintenance, AGM, Event, Emergency*), and Notice Content.
-3. Attach optional PDF documents (e.g., *Audited Accounts FY25-26.pdf*).
-4. Click **Publish & Send Broadcast**. All residents receive instant push notifications.
-
-#### Launching AGM E-Voting Polls:
-1. Go to **Governance & Polls ➔ Create Poll**.
-2. Enter Poll Title, Motion Description, and Voting Deadline.
-3. Configure Options (e.g., *Approved, Rejected, Abstain*).
-4. **Enforce 1-Flat = 1-Vote Rule:** System blocks multiple votes from the same flat number.
-5. Real-time voting progress bar and quorum percentage update live on committee dashboards.
-
----
-
-### 3.5 Resident Payments & Treasurer Receipts Reconciliation
-
-1. **Resident Payment Experience:**
-   - Resident opens **My Dues** on Web or Mobile App.
-   - Taps **Pay Now** on an unpaid invoice.
-   - Chooses **Dynamic UPI QR Code** (GPay, PhonePe, Paytm) or **Payment Gateway** (Razorpay / Credit Card / Netbanking).
-   - Upon completing payment, transaction hash and screenshot are logged.
-2. **Treasurer Approval & Verification:**
-   - Automated Webhooks verify gateway payments and transition invoice status from `Unpaid` to `Paid` instantly.
-   - For manual bank transfer/offline checks, the Treasurer opens **Financial Ledger ➔ Pending Approvals**, verifies the bank credit, and clicks **Approve Payment**.
-   - An official PDF Payment Receipt with GST breakups is generated and emailed to the resident.
-
----
-
-## Phase 4: Troubleshooting, Errors & Solutions Matrix
-
-| Error Scenario | Root Cause | Step-by-Step Resolution Procedure |
+| Role | Primary Responsibility | Granted Permission Keys |
 | :--- | :--- | :--- |
-| **"Resident unable to log in / Phone number not found"** | The resident's phone number is either not added to the Resident Directory or formatted without the proper country code prefix. | 1. Admin opens **Resident Directory**.<br>2. Search for the flat number.<br>3. Verify phone number format (+91 XXXXX XXXXX).<br>4. Ensure status is set to `Active`.<br>5. Click **Resend Login Invite**. |
-| **"Duplicate flat entry error during CSV import"** | The CSV file contains duplicate flat numbers, or the flat already exists in the society registry. | 1. Open the CSV file in Excel/Google Sheets.<br>2. Run **Remove Duplicates** on `FlatNo` column.<br>3. In Admin Console, check if flats are already registered under a different Wing.<br>4. Re-upload clean CSV. |
-| **"Maintenance invoice generated with incorrect amount"** | Inaccurate area (SqFt) setting in flat profile or incorrect base rate configuration in Billing Rules. | 1. Go to **Billing Rules** and verify flat rate vs. per SqFt rate.<br>2. Check flat details under **Resident Directory** to ensure correct SqFt area.<br>3. Delete draft batch invoice, update rates, and regenerate batch. |
-| **"Payment receipt submitted but invoice status still shows Overdue"** | Offline bank payment pending Treasurer approval or payment gateway webhook callback failed. | 1. Treasurer opens **Payments Ledger ➔ Pending Approvals**.<br>2. Verify transaction reference number against society bank statement.<br>3. Click **Approve Payment** to flip status to `Paid`. |
-| **"Gatekeeper push notification not received by resident"** | Mobile device lacks Expo Push Token registration or notifications disabled in OS settings. | 1. Ensure resident has logged into the mobile app on a physical device.<br>2. Verify notification permissions in phone Settings.<br>3. Check token status in **Admin Console ➔ Push Tokens Register**. |
-| **"Water meter reading entry fails or displays negative consumption"** | Current meter reading entered is less than the previous recorded reading. | 1. Verify physical meter dial.<br>2. Ensure current reading > previous month reading.<br>3. If meter was replaced, log a **Meter Replacement Entry** in the Water Meter module to reset baseline. |
-| **"Poll vote rejected ('You have already voted for this flat')"** | Another registered member/co-owner from the same flat number has already submitted a ballot for this motion. | 1. Platform strictly enforces 1-Flat = 1-Vote policy as per Bye-Law 114.<br>2. Admin can inspect voting audit trail to view timestamp and member who cast the flat's vote. |
+| **SOCIETY_ADMIN** | Managing Committee Administrator | `["*"]` (Full administrative override rights) |
+| **PRESIDENT** | Society Chief Executive | `["voting:write", "notices:write", "helpdesk:write", "committee:read"]` |
+| **SECRETARY** | Operational Administrative Head | `["voting:write", "notices:write", "helpdesk:write", "amenities:write", "tenants:write"]` |
+| **TREASURER** | Financial & Accounting Head | `["billing:read", "billing:write", "expenses:write", "audit:read"]` |
+| **AUDITOR** | Independent Compliance Inspector | `["billing:read", "expenses:read", "audit:read"]` (Read-only financial access) |
+| **GATE_STAFF** | Main Gate Security Guard | `["gatekeeper:read", "gatekeeper:write", "alerts:write"]` |
+| **RESIDENT** | Flat Owner or Registered Tenant | `["self:read", "billing:pay", "helpdesk:file", "voting:cast"]` |
+
+### Modifying Committee Role Assignments
+1. Open **Committee RBAC Console** (`#committee-rbac-btn`) in the Admin Console.
+2. Select the target committee member or user auth account.
+3. Choose the target granular role (`SOCIETY_ADMIN`, `TREASURER`, `SECRETARY`, `GATE_STAFF`, etc.).
+4. Click **Assign Role** — RBAC rights update instantly and are synced to Supabase.
 
 ---
-*Manual Version 2.5 — Generated for Housing Society Management Platform*
+
+## Phase 3: Module Settings Catalog & Tenant Discretion Toggles
+
+Societies can toggle features ON or OFF dynamically based on their specific infrastructure requirements.
+
+### Module Catalog Reference (`enabled_modules` JSONB)
+
+```json
+{
+  "gatekeeper": true,
+  "billing": true,
+  "helpdesk": true,
+  "voting": true,
+  "facility_booking": true,
+  "water_meters": true,
+  "tenants": true,
+  "document_vault": true
+}
+```
+
+### Module Configuration Settings (`module_settings` JSONB)
+
+```json
+{
+  "gatekeeper": {
+    "autoApproveGuests": true,
+    "passExpiryHours": 12
+  },
+  "billing": {
+    "enableGST": true,
+    "autoInvoiceDay": 1
+  },
+  "society": {
+    "dueDateDay": 15,
+    "lateFeeInterestPercent": 12
+  }
+}
+```
+
+---
+
+## Phase 4: Master Configurable Items Reference Matrix
+
+| Area / Module | Field Name | Expected Format / Example | Data Type & Range | Description & Validation Rules |
+| :--- | :--- | :--- | :--- | :--- |
+| **Society Metadata** | `Name` | `Greenwood Residency Co-Op Housing Society Ltd.` | String (3–120 chars) | Legal society title. Auto-generates unique `SocietyCode` & URL slug. |
+| **Society Metadata** | `GSTIN` | `27AAACG1234H1Z5` | String (15-char Regex) | 15-character statutory GST identification number. Must match standard regex. |
+| **Society Metadata** | `BuildingType` | `Housing Society` \| `Apartment Complex` | Enum | Architectural designation used in invoice letterheads. |
+| **Financial Engine** | `BillingMode` | `Flat Rate` \| `SqFt Rate` \| `Hybrid` | Enum | Calculation model for batch invoice generation. |
+| **Financial Engine** | `RatePerSqFt` | `3.50` | Numeric (> 0) | Rate multiplied by flat SqFt area when `BillingMode` is `SqFt Rate`. |
+| **Financial Engine** | `FlatRateAmount` | `2500` | Numeric (> 0) | Fixed maintenance charge per unit when `BillingMode` is `Flat Rate`. |
+| **Financial Engine** | `DueDateDay` | `15` | Integer (1–28) | Cutoff day of the month for maintenance payments. Must be between 1 and 28. |
+| **Financial Engine** | `LateFeeInterestPercent` | `12` | Numeric (0–50%) | Annual interest rate charged on overdue maintenance balances. |
+| **Water Metering** | `ratePerUnit` | `15.00` | Numeric (> 0) | Rate in ₹ per unit of water consumed. |
+| **Water Metering** | `tier1Limit` | `5000` | Integer (> 0) | Monthly liter limit before higher tariff tier applies. |
+| **Gatekeeper** | `passExpiryHours` | `12` | Integer (1–72) | Duration in hours before pre-approved visitor QR code expires. |
+| **Gatekeeper** | `gatePasscode` | `admin123` | String (Min 6 chars) | Administrative passcode for gate guard kiosk terminals. |
+| **Facility Booking**| `maxAdvanceDays` | `30` | Integer (1–90) | Maximum days in advance a resident can reserve an amenity slot. |
+| **AGM Voting** | `enforceOneVotePerFlat` | `true` | Boolean | Strictly enforces 1 ballot per flat number as per Bye-Law 114. |
+
+---
+
+## Phase 5: Daily & Monthly Operational Workflows
+
+### 5.1 Automated Monthly Batch Invoicing
+1. Navigate to **Financials ➔ Invoices ➔ Generate Batch Invoices**.
+2. Select Billing Month & Year (e.g. *August 2026*).
+3. The system calculates dues for each unit:
+   $$\text{Total Invoice} = \text{Base Maintenance} + \text{Water Meter Usage} + \text{Parking Fees} + \text{Arrears} - \text{Advance Credits}$$
+4. Click **Publish & Broadcast Invoices** — dispatches instant push notifications and emails with direct payment links to all residents.
+
+### 5.2 Gatekeeper Visitor Entry Workflow
+1. Guard accesses **Gatekeeper Kiosk** using security guard credentials.
+2. Enters Visitor Name, Mobile Number, Vehicle Number, Purpose, and Target Flat.
+3. System dispatches real-time **Expo Push Notification** to the resident's smartphone.
+4. Resident taps **Approve** ➔ Kiosk displays green *"Entry Granted"* notification.
+5. For pre-approved visitors, the guard scans the guest's 6-digit OTP or QR code for 1-tap entry.
+
+---
+
+## Phase 6: Automated Test Suites & Security Boundaries
+
+The platform features an automated E2E test suite built with **Jest**, **Playwright**, and **Supabase CLI**:
+
+### Running the Test Suite
+```bash
+# Run all Jest automated test suites
+npm run test:all
+
+# Run E2E Playwright tests
+npm run test:e2e
+
+# Run Supabase RLS security verification
+npm run test:security
+```
+
+### Key Automated Test Coverage
+- **`01-happy-path/`**: Batch invoicing, visitor passes, AGM voting, water metering, amenity booking, dual-approval expenses.
+- **`02-negative/`**: Expired visitor tokens, duplicate flat registration, malformed CSV uploads.
+- **`03-security/`**: Cross-tenant RLS isolation checks.
+- **`04-performance/`**: Batch invoicing SLA benchmark (<500ms for 100+ flats).
+- **`05-rbac-and-toggles/`**: Role permission enforcement and feature toggle evaluation.
+- **`06-auth-and-identity/`**: `test_duplicate_society_names` and `test_forced_password_reset_gate`.
+- **`07-governance-and-rls/`**: `test_disabled_feature_access_blocked` and `test_treasurer_vs_secretary_rbac`.
+- **`08-negative-and-boundaries/`**: Invalid OTPs, expired passwords, negative penalty interest rates, invalid due dates.
+
+---
+
+## Phase 7: Comprehensive Troubleshooting & Error Resolution Matrix
+
+| Error Message | Root Cause | Step-by-Step Resolution Procedure |
+| :--- | :--- | :--- |
+| **`"Resident unable to log in / Phone number not found"`** | Resident phone number missing or improperly formatted without country code. | 1. Open **Resident Directory**.<br>2. Search flat number.<br>3. Verify phone format (`+91 XXXXX XXXXX`).<br>4. Click **Resend Login Invite**. |
+| **`"Duplicate flat entry error during CSV import"`** | CSV file contains duplicate flat entries or flat already registered under another wing. | 1. Open CSV file in Excel/Google Sheets.<br>2. Run **Remove Duplicates** on `FlatNo` column.<br>3. Re-upload clean CSV file. |
+| **`"Maintenance due date day must be between 1 and 28"`** | Due date set to 29, 30, or 31, which invalidates short months like February. | 1. Open **Module Settings & Toggles**.<br>2. Set `DueDateDay` to a valid number between 1 and 28 (Default: 15).<br>3. Save configuration. |
+| **`"Late fee penalty interest rate cannot be negative"`** | Negative number submitted for penalty interest percentage. | 1. Open **Module Settings & Toggles**.<br>2. Set `LateFeeInterestPercent` to a positive value between 0% and 50%.<br>3. Save configuration. |
+| **`"Access Denied: Voting module disabled by society"`** | Resident attempting to submit vote when `voting` module is toggled OFF in society settings. | 1. Managing Committee opens **Module Settings & Toggles**.<br>2. Toggle **AGM Resolution Polling & E-Voting** to **Active**.<br>3. Save settings. |
+| **`"HTTP 403: Insufficient Role Permissions"`** | Committee member attempting action outside their assigned RBAC rights (e.g. Secretary attempting invoice generation). | 1. Open **Committee RBAC Console**.<br>2. Verify user's assigned role.<br>3. If necessary, assign `SOCIETY_ADMIN` or `TREASURER` role. |
+| **`"QR Pass Expired / Entry Denied"`** | Pre-approved visitor pass scanned past the `passExpiryHours` window. | 1. Resident generates a fresh visitor pass in the mobile app.<br>2. Alternatively, guard uses manual visitor verification flow. |
+
+---
+*Operational Manual Version 3.0 — Smart Co-op Housing Society Management SaaS*

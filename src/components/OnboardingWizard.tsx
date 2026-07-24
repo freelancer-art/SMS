@@ -15,6 +15,7 @@ import {
   Settings
 } from 'lucide-react';
 import { Society, Member, Tower, FeatureFlags } from '../types';
+import { generateSocietyCode, generateSocietySlug, dispatchWelcomeNotification, generateTempPassword } from '../utils/authHelpers';
 
 interface OnboardingWizardProps {
   onComplete: (society: Society, initialMembers: Member[], adminEmail: string, adminFlat: string) => void;
@@ -156,9 +157,16 @@ export default function OnboardingWizard({ onComplete, onCancel, theme = 'light'
       }
     }
 
+    const societyCode = generateSocietyCode(socName);
+    const slug = generateSocietySlug(socName);
+    const cleanAdminEmail = adminEmail.trim().toLowerCase();
+
     const newSociety: Society = {
       id: socId,
       Name: socName,
+      SocietyCode: societyCode,
+      Slug: slug,
+      PrimaryAdminEmail: cleanAdminEmail,
       BuildingType: socType,
       PostalAddress: `${socAddress} | Reg No: ${regNo || 'PENDING'}`,
       Wings: generatedWings,
@@ -167,6 +175,17 @@ export default function OnboardingWizard({ onComplete, onCancel, theme = 'light'
       Towers: generatedTowers.length > 0 ? generatedTowers : undefined,
       FeaturesEnabled: features
     };
+
+    // Auto-generate temporary password and dispatch welcome notification for the admin
+    const adminTempPass = generateTempPassword();
+    dispatchWelcomeNotification({
+      recipientName: adminName,
+      recipientEmail: cleanAdminEmail,
+      recipientPhone: adminPhone,
+      societyName: socName,
+      tempPassword: adminTempPass,
+      loginMethod: 'EmailTempPass'
+    });
 
     // Prepare initial members directory (one per flat)
     const initialMembers: Member[] = previewFlats.map(pf => {
@@ -179,14 +198,14 @@ export default function OnboardingWizard({ onComplete, onCancel, theme = 'light'
         Tower: pf.tower || '',
         OwnerName: isThisAdmin ? adminName : 'Vacant Unit',
         ContactNo: isThisAdmin ? adminPhone : '',
-        Email: isThisAdmin ? adminEmail.trim().toLowerCase() : '',
+        Email: isThisAdmin ? cleanAdminEmail : '',
         Balance: isThisAdmin ? 0 : 0,
         Status: 'Owner',
         Role: isThisAdmin ? 'Admin' : 'Member'
       };
     });
 
-    onComplete(newSociety, initialMembers, adminEmail, adminFlatSelection);
+    onComplete(newSociety, initialMembers, cleanAdminEmail, adminFlatSelection);
   };
 
   const isDark = theme === 'dark';

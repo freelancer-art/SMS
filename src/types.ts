@@ -4,6 +4,46 @@ export interface Tower {
   Wings: string[];
 }
 
+export interface EnabledModules {
+  gatekeeper: boolean;
+  billing: boolean;
+  helpdesk: boolean;
+  voting: boolean;
+  facility_booking: boolean;
+  water_meters: boolean;
+  tenants: boolean;
+  document_vault: boolean;
+}
+
+export interface GatekeeperSettings {
+  autoApproveGuests: boolean;
+  passExpiryHours: number;
+  gateGuardPhone?: string;
+}
+
+export interface BillingModuleSettings {
+  enableGST: boolean;
+  gstRatePercent?: number;
+  autoInvoiceDay: number; // 1 to 28 day of month
+  defaultBillingMode?: 'Flat Rate' | 'SqFt Rate' | 'Hybrid';
+}
+
+export interface SocietyCoreSettings {
+  logoUrl?: string;
+  societyCode?: string;
+  dueDateDay: number;
+  lateFeeInterestPercent: number;
+  noticeEmailAlerts?: boolean;
+}
+
+export interface ModuleSettings {
+  gatekeeper: GatekeeperSettings;
+  billing: BillingModuleSettings;
+  society: SocietyCoreSettings;
+}
+
+export type GranularRoleName = 'SOCIETY_ADMIN' | 'TREASURER' | 'SECRETARY' | 'GATE_STAFF' | 'RESIDENT' | 'SuperAdmin' | 'Admin' | 'Committee Member' | 'Member';
+
 export interface FeatureFlags {
   gatekeeper: boolean;
   waterMeters: boolean;
@@ -17,6 +57,10 @@ export interface FeatureFlags {
 export interface Society {
   id: string;
   Name: string;
+  SocietyCode?: string; // Deterministic, unique society code (e.g., 'GWRES01', 'OMRES1')
+  Slug?: string; // Unique URL slug (e.g., 'greenwood-residency-gw01')
+  PrimaryAdminEmail?: string; // Real email of the primary society administrator
+  LogoUrl?: string;
   BuildingType: string;
   PostalAddress: string;
   Wings: string[];
@@ -24,6 +68,8 @@ export interface Society {
   StructureType?: 'standalone' | 'wings' | 'towers_wings';
   Towers?: Tower[];
   FeaturesEnabled?: FeatureFlags;
+  EnabledModules?: EnabledModules; // Tenant Discretion Feature Toggles JSONB
+  ModuleSettings?: ModuleSettings; // Configurable Module Settings Catalog JSONB
   // Billing Calculation Engine Settings
   BillingMode?: 'Flat Rate' | 'SqFt Rate' | 'Hybrid';
   RatePerSqFt?: number;
@@ -240,6 +286,11 @@ export interface UserAuth {
   RoleId: string; // Foreign key to Roles.id
   SocietyId?: string; // Foreign key to Societies.id
   Status: 'Active' | 'Suspended';
+  MustChangePassword?: boolean; // Forced first-login password reset flag
+  Phone?: string; // Contact phone number for Phone + OTP login
+  TempPassword?: string; // Cleartext/simulated system-generated temporary password for delivery notifications
+  IsSuperAdmin?: boolean; // Flag indicating if user is primary SuperAdmin for the society
+  LastLoginAt?: string;
 }
 
 export interface ComplaintReply {

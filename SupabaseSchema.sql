@@ -38,12 +38,18 @@ DROP TABLE IF EXISTS "Societies" CASCADE;
 CREATE TABLE "Societies" (
   "id" TEXT PRIMARY KEY,
   "Name" TEXT NOT NULL,
+  "SocietyCode" TEXT UNIQUE,
+  "Slug" TEXT UNIQUE,
+  "PrimaryAdminEmail" TEXT,
+  "LogoUrl" TEXT,
   "BuildingType" TEXT DEFAULT 'Housing Society',
   "PostalAddress" TEXT,
   "Wings" TEXT[] DEFAULT ARRAY[]::TEXT[],
   "HasWings" BOOLEAN DEFAULT false,
   "StructureType" TEXT DEFAULT 'standalone',
   "FeaturesEnabled" JSONB DEFAULT '{"gatekeeper": true, "waterMeters": false, "tenantRegister": true, "amenities": true, "assetAMC": false, "parkingRegister": true, "documentVault": true}'::jsonb,
+  "enabled_modules" JSONB DEFAULT '{"gatekeeper": true, "billing": true, "helpdesk": true, "voting": false, "facility_booking": false, "water_meters": true, "tenants": true, "document_vault": true}'::jsonb,
+  "module_settings" JSONB DEFAULT '{"gatekeeper": {"autoApproveGuests": true, "passExpiryHours": 12}, "billing": {"enableGST": false, "autoInvoiceDay": 1}, "society": {"dueDateDay": 15, "lateFeeInterestPercent": 12}}'::jsonb,
   "BillingMode" TEXT DEFAULT 'Flat Rate',
   "RatePerSqFt" NUMERIC DEFAULT 3.5,
   "FlatRateAmount" NUMERIC DEFAULT 2000,
@@ -62,7 +68,8 @@ CREATE TABLE "Roles" (
   "id" TEXT PRIMARY KEY,
   "RoleName" TEXT NOT NULL,
   "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
-  "Description" TEXT
+  "Description" TEXT,
+  "Permissions" JSONB DEFAULT '[]'::jsonb
 );
 
 -- UserAuth
@@ -73,7 +80,12 @@ CREATE TABLE "UserAuth" (
   "Salt" TEXT NOT NULL,
   "RoleId" TEXT NOT NULL REFERENCES "Roles"("id") ON DELETE CASCADE,
   "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
-  "Status" TEXT DEFAULT 'Active'
+  "Status" TEXT DEFAULT 'Active',
+  "MustChangePassword" BOOLEAN DEFAULT true,
+  "Phone" TEXT,
+  "TempPassword" TEXT,
+  "IsSuperAdmin" BOOLEAN DEFAULT false,
+  "LastLoginAt" TIMESTAMPTZ
 );
 
 -- UserConsents (Digital Personal Data Protection Act 2023 Consent Audit Trail)
@@ -534,23 +546,25 @@ END $$;
 -- ============================================================================
 
 -- Societies Seed
-INSERT INTO "Societies" ("id", "Name", "BuildingType", "PostalAddress", "Wings", "HasWings", "StructureType", "BillingMode", "RatePerSqFt", "FlatRateAmount", "BaseUtilityAmount", "LateFeeType", "LateFeeValue", "GatewayEnabled", "GatewayProvider", "UPI_ID") VALUES
-('greenwood', 'Greenwood Residency', 'Housing Society', 'Sector 5, Palm Beach Road, Navi Mumbai, MH - 400706', ARRAY[]::TEXT[], false, 'standalone', 'SqFt Rate', 3.5, 2000, 500, 'Interest', 12, false, 'Manual', 'greenwood.society@upi'),
-('royal_heights', 'Royal Heights', 'Gated Community', 'MG Road, Bandra West, Mumbai, MH - 400050', ARRAY['Tower 1', 'Tower 2']::TEXT[], true, 'towers_wings', 'Flat Rate', 4.0, 3500, 750, 'Fixed', 250, true, 'Razorpay', 'royalheights@upi'),
-('sea_breeze', 'Sea Breeze Apartments', 'Apartment Complex', 'Carter Road, Bandra, Mumbai, MH - 400050', ARRAY['Wing A', 'Wing B']::TEXT[], true, 'wings', 'Hybrid', 3.0, 1800, 600, 'Interest', 10, false, 'Manual', 'seabreeze@upi');
+INSERT INTO "Societies" ("id", "Name", "SocietyCode", "Slug", "PrimaryAdminEmail", "BuildingType", "PostalAddress", "Wings", "HasWings", "StructureType", "BillingMode", "RatePerSqFt", "FlatRateAmount", "BaseUtilityAmount", "LateFeeType", "LateFeeValue", "GatewayEnabled", "GatewayProvider", "UPI_ID") VALUES
+('greenwood', 'Greenwood Residency', 'GWRES01', 'greenwood-residency-gw01', 'amit080578@gmail.com', 'Housing Society', 'Sector 5, Palm Beach Road, Navi Mumbai, MH - 400706', ARRAY[]::TEXT[], false, 'standalone', 'SqFt Rate', 3.5, 2000, 500, 'Interest', 12, false, 'Manual', 'greenwood.society@upi'),
+('royal_heights', 'Royal Heights', 'ROYAL02', 'royal-heights-rh02', 'secretary@royalheights.com', 'Gated Community', 'MG Road, Bandra West, Mumbai, MH - 400050', ARRAY['Tower 1', 'Tower 2']::TEXT[], true, 'towers_wings', 'Flat Rate', 4.0, 3500, 750, 'Fixed', 250, true, 'Razorpay', 'royalheights@upi'),
+('sea_breeze', 'Sea Breeze Apartments', 'SEABR03', 'sea-breeze-sb03', 'secretary@seabreeze.com', 'Apartment Complex', 'Carter Road, Bandra, Mumbai, MH - 400050', ARRAY['Wing A', 'Wing B']::TEXT[], true, 'wings', 'Hybrid', 3.0, 1800, 600, 'Interest', 10, false, 'Manual', 'seabreeze@upi');
 
--- Roles Seed
-INSERT INTO "Roles" ("id", "RoleName", "SocietyId", "Description") VALUES
-('Role-SuperAdmin', 'SuperAdmin', NULL, 'Global Super-Admin overseeing all societies'),
-('Role-greenwood-admin', 'Admin', 'greenwood', 'Primary Admin Secretary for Greenwood Residency'),
-('Role-greenwood-committee', 'Committee Member', 'greenwood', 'Elected Committee Member for Greenwood Residency'),
-('Role-greenwood-member', 'Member', 'greenwood', 'Standard Flat Owner or Tenant');
+-- Roles Seed (Granular RBAC Roles)
+INSERT INTO "Roles" ("id", "RoleName", "SocietyId", "Description", "Permissions") VALUES
+('Role-SuperAdmin', 'SuperAdmin', NULL, 'Global Super-Admin overseeing all societies', '["*"]'::jsonb),
+('Role-greenwood-admin', 'SOCIETY_ADMIN', 'greenwood', 'Full Society Administrator with management & module toggle rights', '["billing:read","billing:write","gatekeeper:read","gatekeeper:write","voting:read","voting:write","helpdesk:read","helpdesk:write","members:read","members:write","committee:write","settings:write"]'::jsonb),
+('Role-greenwood-treasurer', 'TREASURER', 'greenwood', 'Financial Treasurer managing invoices, expenses, collections & reports', '["billing:read","billing:write","members:read","expenses:read","expenses:write","reports:read"]'::jsonb),
+('Role-greenwood-secretary', 'SECRETARY', 'greenwood', 'Society Secretary managing notices, voting polls, complaints & document vault', '["voting:read","voting:write","helpdesk:read","helpdesk:write","notices:write","members:read","vault:write"]'::jsonb),
+('Role-greenwood-gate', 'GATE_STAFF', 'greenwood', 'Security Guard / Gate Staff managing visitor logs and QR pass entry', '["gatekeeper:read","gatekeeper:write","alerts:write"]'::jsonb),
+('Role-greenwood-resident', 'RESIDENT', 'greenwood', 'Resident Flat Owner or Tenant with self-service portal access', '["billing:read","gatekeeper:read","voting:read","helpdesk:write","facility:write"]'::jsonb);
 
 -- UserAuth Seed
-INSERT INTO "UserAuth" ("id", "EmailOrPhone", "PasswordHash", "Salt", "RoleId", "SocietyId", "Status") VALUES
-('Auth-Super-Admin', 'superadmin@societyconnect.com', '68a1d7f6b907f154388e6a5789f1a234', 'SALT-SUPER-ADMIN', 'Role-SuperAdmin', NULL, 'Active'),
-('Auth-gw-amit-sharma', 'amit080578@gmail.com', 'c93a0050dbd181966d5b03f0b2f0b201', 'SALT-GW-AMIT', 'Role-greenwood-admin', 'greenwood', 'Active'),
-('Auth-gw-amit-sharma-alt', 'amit.sharma@example.com', 'c93a0050dbd181966d5b03f0b2f0b201', 'SALT-GW-AMIT-ALT', 'Role-greenwood-admin', 'greenwood', 'Active');
+INSERT INTO "UserAuth" ("id", "EmailOrPhone", "PasswordHash", "Salt", "RoleId", "SocietyId", "Status", "MustChangePassword", "Phone", "TempPassword", "IsSuperAdmin") VALUES
+('Auth-Super-Admin', 'superadmin@societyconnect.com', '68a1d7f6b907f154388e6a5789f1a234', 'SALT-SUPER-ADMIN', 'Role-SuperAdmin', NULL, 'Active', false, '+91 99999 00000', NULL, true),
+('Auth-gw-amit-sharma', 'amit080578@gmail.com', 'c93a0050dbd181966d5b03f0b2f0b201', 'SALT-GW-AMIT', 'Role-greenwood-admin', 'greenwood', 'Active', false, '+91 98765 43210', NULL, true),
+('Auth-gw-amit-sharma-alt', 'amit.sharma@example.com', 'c93a0050dbd181966d5b03f0b2f0b201', 'SALT-GW-AMIT-ALT', 'Role-greenwood-admin', 'greenwood', 'Active', true, '+91 98765 43210', 'admin123', true);
 
 -- Members Seed
 INSERT INTO "Members" ("id", "SocietyId", "FlatNo", "OwnerName", "ContactNo", "Email", "Balance", "Status", "CoOwners", "VehicleNo", "AreaSqFt") VALUES

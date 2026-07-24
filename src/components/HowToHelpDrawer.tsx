@@ -34,9 +34,44 @@ export const HowToHelpDrawer: React.FC<HowToHelpDrawerProps> = ({
   if (!isOpen) return null;
 
   const isDark = theme === 'dark';
-  const [activeCategory, setActiveCategory] = useState<'guides' | 'workflows' | 'troubleshooting'>('guides');
+  const [activeCategory, setActiveCategory] = useState<'guides' | 'config' | 'workflows' | 'troubleshooting'>('guides');
   const [activeGuideId, setActiveGuideId] = useState<string>('admin-guide');
   const [faqSearchQuery, setFaqSearchQuery] = useState<string>('');
+
+  const configurableSettings = [
+    {
+      category: '🏢 Society Metadata & Onboarding',
+      items: [
+        { name: 'Society Name', expected: 'Greenwood Residency Co-Op Housing Society Ltd.', type: 'String (Max 120 chars)', desc: 'Official registered name. Auto-generates unique SocietyCode (e.g., OMRE1) & Slug.' },
+        { name: 'GSTIN', expected: '27AAACG1234H1Z5', type: 'String (15-char Regex)', desc: '15-character statutory GST identification number for tax invoice headers.' },
+        { name: 'Structure Type', expected: 'wings | standalone | towers_wings', type: 'Enum', desc: 'Defines flat directory hierarchy (e.g. Wing A, Tower 1).' }
+      ]
+    },
+    {
+      category: '💳 Maintenance Billing & Financial Engine',
+      items: [
+        { name: 'Billing Mode', expected: 'Flat Rate | SqFt Rate | Hybrid', type: 'Enum', desc: 'Calculation strategy for monthly unit maintenance dues.' },
+        { name: 'RatePerSqFt / FlatRateAmount', expected: '₹3.50 per SqFt OR ₹2,500 Flat Rate', type: 'Numeric (Positive)', desc: 'Base unit charge applied during automated monthly batch invoicing.' },
+        { name: 'Due Date Day', expected: '1 to 28 (Default: 15)', type: 'Integer (1-28)', desc: 'Monthly payment cutoff day. Values > 28 strictly blocked by system validation.' },
+        { name: 'Late Fee Interest Percent', expected: '12% per annum (Default: 12)', type: 'Numeric (0% - 50%)', desc: 'Annual interest percentage for overdue balances accrued pro-rata.' }
+      ]
+    },
+    {
+      category: '⚡ Module Catalog & Feature Toggles (JSONB)',
+      items: [
+        { name: 'enabled_modules JSONB', expected: '{"gatekeeper": true, "billing": true, "voting": true, "water_meters": true}', type: 'JSONB Object', desc: 'Tenant discretion toggles. Disabling a module hides tabs & blocks RLS API access.' },
+        { name: 'module_settings.gatekeeper', expected: '{"autoApproveGuests": true, "passExpiryHours": 12}', type: 'JSONB Object', desc: 'Controls guest QR pass expiration and auto-approval thresholds.' }
+      ]
+    },
+    {
+      category: '🛡️ Committee Roles & Granular RBAC Permissions',
+      items: [
+        { name: 'SOCIETY_ADMIN', expected: '["*"] (Full System Rights)', type: 'Role Enum', desc: 'Access to Society settings, financial ledgers, committee RBAC, and audit logs.' },
+        { name: 'TREASURER', expected: '["billing:write", "expenses:write", "audit:read"]', type: 'Role Enum', desc: 'Financial invoice publishing and payouts. Blocked from Gatekeeper security logs.' },
+        { name: 'SECRETARY', expected: '["voting:write", "notices:write", "helpdesk:write"]', type: 'Role Enum', desc: 'AGM poll creation & broadcasts. Blocked from modifying financial settings.' }
+      ]
+    }
+  ];
 
   const guides = [
     {
@@ -232,6 +267,17 @@ export const HowToHelpDrawer: React.FC<HowToHelpDrawerProps> = ({
             <span>Setup Guides</span>
           </button>
           <button
+            onClick={() => setActiveCategory('config')}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeCategory === 'config'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Config & Formats</span>
+          </button>
+          <button
             onClick={() => setActiveCategory('workflows')}
             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeCategory === 'workflows'
@@ -307,6 +353,42 @@ export const HowToHelpDrawer: React.FC<HowToHelpDrawerProps> = ({
                     </div>
                   </div>
                 ))}
+            </div>
+          )}
+
+          {activeCategory === 'config' && (
+            <div className="space-y-4">
+              {configurableSettings.map((group, idx) => (
+                <div
+                  key={idx}
+                  className={`p-4 rounded-xl border ${
+                    isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  } space-y-3`}
+                >
+                  <h3 className="text-xs font-extrabold text-purple-400 uppercase tracking-wider">
+                    {group.category}
+                  </h3>
+                  <div className="space-y-2.5">
+                    {group.items.map((item, i) => (
+                      <div key={i} className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 space-y-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-200">{item.name}</span>
+                          <span className="px-2 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-800/60 text-[10px] font-mono font-semibold">
+                            {item.type}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 font-sans">
+                          {item.desc}
+                        </p>
+                        <div className="text-[11px] font-mono text-emerald-400 bg-slate-950 p-2 rounded-md border border-slate-800/80 mt-1">
+                          <span className="text-slate-500 font-extrabold text-[9px] block uppercase">Expected Value / Example:</span>
+                          {item.expected}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

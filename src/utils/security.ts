@@ -65,3 +65,11 @@ export function hashPassword(password: string, salt: string): string {
 export function generateSalt(): string {
   return generateRandomString(16);
 }
+
+/**
+ * Verifies a plain text password against a stored hash and salt.
+ */
+export function verifyPassword(password: string, expectedHash: string, salt: string): boolean {
+  return hashPassword(password, salt) === expectedHash;
+}
+

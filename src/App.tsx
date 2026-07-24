@@ -13,9 +13,13 @@ import {
   Cloud,
   X,
   Key,
-  Check
+  Check,
+  ShieldCheck,
+  Mail,
+  Lock,
+  Smartphone
 } from 'lucide-react';
-import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken } from './types';
+import { Member, Payment, Expense, Complaint, Notice, Society, AuditLog, Invoice, Visitor, ComplaintReply, Role, UserAuth, EmergencyContact, Tenant, Vehicle, GuestParking, SocietyDocument, AssetAMC, WaterMeter, FeatureFlags, Poll, PollVote, Staff, StaffAttendance, Vendor, UserConsent, PushToken, GranularRoleName } from './types';
 import { 
   MULTI_TENANT_MEMBERS, 
   MULTI_TENANT_PAYMENTS, 
@@ -43,6 +47,11 @@ import {
   INITIAL_PUSH_TOKENS
 } from './data/mockData';
 import { hashPassword, generateSalt, generateVisitorAccessToken } from './utils/security';
+import CommitteeManagement from './components/CommitteeManagement';
+import SocietyModuleSettings from './components/SocietyModuleSettings';
+import ForcedPasswordResetModal from './components/ForcedPasswordResetModal';
+import CredentialDeliveryLogModal from './components/CredentialDeliveryLogModal';
+import { provisionUserAccount, dispatchWelcomeNotification, generateTempPassword } from './utils/authHelpers';
 import { crashReporter } from './utils/logger';
 import MobileSimulator from './components/MobileSimulator';
 import ExpoDeveloperHub from './components/ExpoDeveloperHub';
@@ -52,6 +61,9 @@ const DEFAULT_SOCIETIES: Society[] = [
   {
     id: 'greenwood',
     Name: 'Greenwood Residency',
+    SocietyCode: 'GWRES01',
+    Slug: 'greenwood-residency-gw01',
+    PrimaryAdminEmail: 'amit080578@gmail.com',
     BuildingType: 'Housing Society',
     PostalAddress: '123 Greenwood Road, Sector 5, Mumbai, MH - 400001',
     Wings: [],
@@ -61,6 +73,9 @@ const DEFAULT_SOCIETIES: Society[] = [
   {
     id: 'royal_heights',
     Name: 'Royal Heights Complex',
+    SocietyCode: 'ROYAL02',
+    Slug: 'royal-heights-rh02',
+    PrimaryAdminEmail: 'secretary@royalheights.com',
     BuildingType: 'Apartment Complex',
     PostalAddress: 'Plot 45-47, Palm Beach Road, Sanpada, Navi Mumbai, MH - 400705',
     Wings: ['Tower 1 - Wing A', 'Tower 1 - Wing B', 'Tower 2 - Wing A', 'Tower 2 - Wing B'],
@@ -74,6 +89,9 @@ const DEFAULT_SOCIETIES: Society[] = [
   {
     id: 'sea_breeze',
     Name: 'Sea Breeze Co-op Society',
+    SocietyCode: 'SEABR03',
+    Slug: 'sea-breeze-sb03',
+    PrimaryAdminEmail: 'secretary@seabreeze.com',
     BuildingType: 'Residential Co-operative',
     PostalAddress: 'Beach Road, Juhu, Mumbai, MH - 400049',
     Wings: ['Wing A', 'Wing B'],
@@ -150,9 +168,15 @@ export default function App() {
     return localStorage.getItem('active_society_id') || 'greenwood';
   });
 
-  // Super-Admin Society Register States
+  // Super-Admin Society Register & RBAC States
   const [showRegisterSociety, setShowRegisterSociety] = useState(false);
   const [showOnboardingWizard, setShowOnboardingWizard] = useState(false);
+  const [showCredentialDeliveryLog, setShowCredentialDeliveryLog] = useState(false);
+  const [showCommitteeManagementModal, setShowCommitteeManagementModal] = useState(false);
+  const [showSocietySettingsModal, setShowSocietySettingsModal] = useState(false);
+  const [currentSimUserEmail, setCurrentSimUserEmail] = useState<string>(() => {
+    return localStorage.getItem('society_sim_logged_email') || 'amit080578@gmail.com';
+  });
   const [newSocName, setNewSocName] = useState('');
   const [newSocType, setNewSocType] = useState('Housing Society');
   const [newSocAddress, setNewSocAddress] = useState('');
@@ -1891,6 +1915,35 @@ export default function App() {
     }
     updateMembersState(nextMembers);
 
+    // Auto-provision UserAuth credential & send Welcome Notification for new member
+    const identifier = fullMember.Email ? fullMember.Email.trim().toLowerCase() : fullMember.ContactNo ? fullMember.ContactNo.trim() : null;
+    if (identifier) {
+      const existingAuth = userAuths.find(u => u.EmailOrPhone.toLowerCase() === identifier.toLowerCase() && (!u.SocietyId || u.SocietyId === activeSocietyId));
+      if (!existingAuth) {
+        const memberRoleId = `Role-${activeSocietyId}-member`;
+        const tempPass = generateTempPassword();
+        const { userAuth } = provisionUserAccount({
+          emailOrPhone: identifier,
+          phone: fullMember.ContactNo,
+          roleId: memberRoleId,
+          societyId: activeSocietyId,
+          tempPassword: tempPass
+        });
+
+        const nextAuths = [...userAuths, userAuth];
+        updateUserAuthsState(nextAuths);
+
+        dispatchWelcomeNotification({
+          recipientName: fullMember.OwnerName,
+          recipientEmail: fullMember.Email,
+          recipientPhone: fullMember.ContactNo,
+          societyName: activeSociety.Name,
+          tempPassword: tempPass,
+          loginMethod: fullMember.Email ? 'EmailTempPass' : 'PhoneOTP'
+        });
+      }
+    }
+
     // Audit action
     handleAddAuditLog(exists ? 'Modify Member' : 'Add Member', `${exists ? 'Updated' : 'Created'} resident profile for Flat ${fullMember.FlatNo} (${fullMember.OwnerName}) with dues ₹${fullMember.Balance}`);
 
@@ -2757,6 +2810,89 @@ export default function App() {
     }
   };
 
+  // Current user authentication resolution & password update handler
+  const currentUserAuth = userAuths.find(u => 
+    u.EmailOrPhone.toLowerCase() === currentSimUserEmail.toLowerCase() &&
+    (!u.SocietyId || u.SocietyId === activeSocietyId)
+  ) || userAuths.find(u => u.EmailOrPhone.toLowerCase() === currentSimUserEmail.toLowerCase());
+
+  const handlePasswordUpdated = (updatedAuth: UserAuth) => {
+    const nextAuths = userAuths.map(u => u.id === updatedAuth.id ? updatedAuth : u);
+    updateUserAuthsState(nextAuths);
+    handleAddAuditLog('Password Reset', `Completed mandatory first-login password reset for account ${updatedAuth.EmailOrPhone}`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      fetch(`${supabaseUrl}/rest/v1/UserAuth?id=eq.${updatedAuth.id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          PasswordHash: updatedAuth.PasswordHash,
+          Salt: updatedAuth.Salt,
+          MustChangePassword: false,
+          TempPassword: null
+        })
+      }).catch(err => console.warn('Failed to update password hash in Supabase:', err));
+    }
+  };
+
+  const handleUpdateUserRole = (identifier: string, newRoleName: GranularRoleName) => {
+    let targetRole = roles.find(r => r.RoleName === newRoleName && r.SocietyId === activeSocietyId);
+    if (!targetRole) {
+      targetRole = {
+        id: `Role-${activeSocietyId}-${newRoleName.toLowerCase()}`,
+        RoleName: newRoleName as any,
+        SocietyId: activeSocietyId,
+        Description: `Role ${newRoleName} for ${activeSociety.Name}`
+      };
+      setRoles(prev => [...prev, targetRole!]);
+    }
+
+    const auth = userAuths.find(u => u.EmailOrPhone.toLowerCase() === identifier.toLowerCase());
+    if (auth) {
+      const nextAuths = userAuths.map(u => u.id === auth.id ? { ...u, RoleId: targetRole!.id } : u);
+      updateUserAuthsState(nextAuths);
+    }
+
+    const nextMembers = members.map(m => {
+      if ((m.Email && m.Email.toLowerCase() === identifier.toLowerCase()) || m.ContactNo === identifier) {
+        return { ...m, Role: (newRoleName === 'SOCIETY_ADMIN' || newRoleName === 'Admin') ? 'Admin' as const : 'Member' as const };
+      }
+      return m;
+    });
+    updateMembersState(nextMembers);
+
+    handleAddAuditLog('Update Role', `Assigned granular role ${newRoleName} to user/member ${identifier}`);
+  };
+
+  const handleSaveModuleCatalogSettings = (updatedSociety: Society) => {
+    setSocieties(prev => prev.map(s => s.id === updatedSociety.id ? updatedSociety : s));
+    handleAddAuditLog('Update Settings', `Updated feature toggles & module catalog settings for ${updatedSociety.Name}`);
+
+    if (supabaseUrl && supabaseAnonKey) {
+      fetch(`${supabaseUrl}/rest/v1/Societies?id=eq.${updatedSociety.id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          SocietyCode: updatedSociety.SocietyCode,
+          LogoUrl: updatedSociety.LogoUrl,
+          DueDateDay: updatedSociety.DueDateDay,
+          LateFeeValue: updatedSociety.LateFeeValue,
+          enabled_modules: updatedSociety.EnabledModules,
+          module_settings: updatedSociety.ModuleSettings,
+          FeaturesEnabled: updatedSociety.FeaturesEnabled
+        })
+      }).catch(err => console.warn('Failed to sync updated society settings to Supabase:', err));
+    }
+  };
+
   return (
     <div className={`min-h-screen ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans overflow-hidden transition-colors duration-300`}>
       {/* Immersive Onboarding Setup Wizard Overlay */}
@@ -2767,6 +2903,65 @@ export default function App() {
             onCancel={() => setShowOnboardingWizard(false)} 
             theme={theme}
           />
+        </div>
+      )}
+
+      {/* Forced Password Reset Interceptor Modal */}
+      {currentUserAuth && currentUserAuth.MustChangePassword && (
+        <ForcedPasswordResetModal
+          userAuth={currentUserAuth}
+          societyName={activeSociety.Name}
+          onPasswordUpdated={handlePasswordUpdated}
+          theme={theme}
+        />
+      )}
+
+      {/* Credential Delivery & Welcome Audit Log Modal */}
+      <CredentialDeliveryLogModal
+        isOpen={showCredentialDeliveryLog}
+        onClose={() => setShowCredentialDeliveryLog(false)}
+        societyName={activeSociety.Name}
+        theme={theme}
+      />
+
+      {/* Committee Member RBAC Management Modal */}
+      {showCommitteeManagementModal && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl relative">
+            <button
+              onClick={() => setShowCommitteeManagementModal(false)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <CommitteeManagement
+              members={filteredMembers}
+              userAuths={userAuths}
+              roles={roles}
+              societyName={activeSociety.Name}
+              onUpdateUserRole={handleUpdateUserRole}
+              theme={theme}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Configurable Module Catalog & Feature Toggles Modal */}
+      {showSocietySettingsModal && (
+        <div className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl relative">
+            <button
+              onClick={() => setShowSocietySettingsModal(false)}
+              className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <SocietyModuleSettings
+              society={activeSociety}
+              onUpdateSocietySettings={handleSaveModuleCatalogSettings}
+              theme={theme}
+            />
+          </div>
         </div>
       )}
 
@@ -2885,7 +3080,49 @@ export default function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowCommitteeManagementModal(true)}
+            id="committee-rbac-btn"
+            className={`hidden lg:flex items-center gap-1.5 text-xs font-bold ${
+              theme === 'dark' 
+                ? 'bg-slate-800 text-purple-300 border-slate-700 hover:bg-slate-700' 
+                : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 shadow-xs'
+            } px-3 py-1.5 rounded-lg border transition-all cursor-pointer`}
+            title="Manage Committee Roles & RBAC Rights"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+            <span>Committee RBAC</span>
+          </button>
+
+          <button
+            onClick={() => setShowSocietySettingsModal(true)}
+            id="module-settings-btn"
+            className={`hidden lg:flex items-center gap-1.5 text-xs font-bold ${
+              theme === 'dark' 
+                ? 'bg-slate-800 text-purple-300 border-slate-700 hover:bg-slate-700' 
+                : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 shadow-xs'
+            } px-3 py-1.5 rounded-lg border transition-all cursor-pointer`}
+            title="Configure Tenant Feature Toggles & Module Catalog Settings"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <span>Module Settings & Toggles</span>
+          </button>
+
+          <button
+            onClick={() => setShowCredentialDeliveryLog(true)}
+            id="credential-log-btn"
+            className={`hidden lg:flex items-center gap-2 text-xs font-bold ${
+              theme === 'dark' 
+                ? 'bg-slate-800 text-purple-300 border-slate-700 hover:bg-slate-700' 
+                : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 shadow-xs'
+            } px-3 py-1.5 rounded-lg border transition-all cursor-pointer`}
+            title="View Dispatched Welcome Credentials & Audit Log"
+          >
+            <Mail className="w-3.5 h-3.5 text-purple-400" />
+            <span>Credential Delivery Log</span>
+          </button>
+
           <button
             onClick={toggleTheme}
             id="theme-toggle-btn"

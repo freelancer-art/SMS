@@ -3062,12 +3062,18 @@ DROP TABLE IF EXISTS "Societies" CASCADE;
 CREATE TABLE "Societies" (
   "id" TEXT PRIMARY KEY,
   "Name" TEXT NOT NULL,
+  "SocietyCode" TEXT UNIQUE,
+  "Slug" TEXT UNIQUE,
+  "PrimaryAdminEmail" TEXT,
+  "LogoUrl" TEXT,
   "BuildingType" TEXT DEFAULT 'Housing Society',
   "PostalAddress" TEXT,
   "Wings" TEXT[] DEFAULT ARRAY[]::TEXT[],
   "HasWings" BOOLEAN DEFAULT false,
   "StructureType" TEXT DEFAULT 'standalone',
   "FeaturesEnabled" JSONB DEFAULT '{"gatekeeper": true, "waterMeters": false, "tenantRegister": true, "amenities": true, "assetAMC": false, "parkingRegister": true, "documentVault": true}'::jsonb,
+  "enabled_modules" JSONB DEFAULT '{"gatekeeper": true, "billing": true, "helpdesk": true, "voting": false, "facility_booking": false, "water_meters": true, "tenants": true, "document_vault": true}'::jsonb,
+  "module_settings" JSONB DEFAULT '{"gatekeeper": {"autoApproveGuests": true, "passExpiryHours": 12}, "billing": {"enableGST": false, "autoInvoiceDay": 1}, "society": {"dueDateDay": 15, "lateFeeInterestPercent": 12}}'::jsonb,
   "BillingMode" TEXT DEFAULT 'Flat Rate',
   "RatePerSqFt" NUMERIC DEFAULT 3.5,
   "FlatRateAmount" NUMERIC DEFAULT 2000,
@@ -3086,7 +3092,8 @@ CREATE TABLE "Roles" (
   "id" TEXT PRIMARY KEY,
   "RoleName" TEXT NOT NULL,
   "SocietyId" TEXT REFERENCES "Societies"("id") ON DELETE CASCADE,
-  "Description" TEXT
+  "Description" TEXT,
+  "Permissions" JSONB DEFAULT '[]'::jsonb
 );
 
 -- UserAuth

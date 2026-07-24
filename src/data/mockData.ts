@@ -877,6 +877,10 @@ export interface UserAuthMock {
   RoleId: string;
   SocietyId?: string;
   Status: 'Active' | 'Suspended';
+  MustChangePassword?: boolean;
+  Phone?: string;
+  TempPassword?: string;
+  IsSuperAdmin?: boolean;
 }
 
 export const MULTI_TENANT_ROLES: RoleMock[] = [
@@ -936,7 +940,10 @@ export const MULTI_TENANT_USER_AUTHS: UserAuthMock[] = [
     PasswordHash: "C6F2A5623B689793", // will mix with salt
     Salt: "SALT-SUPER-ADMIN",
     RoleId: "Role-SuperAdmin",
-    Status: "Active"
+    Status: "Active",
+    MustChangePassword: false,
+    Phone: "+91 99999 00000",
+    IsSuperAdmin: true
   },
   // Greenwood Primary Admin: Amit Sharma
   {
@@ -946,7 +953,10 @@ export const MULTI_TENANT_USER_AUTHS: UserAuthMock[] = [
     Salt: "SALT-GW-AMIT",
     RoleId: "Role-greenwood-admin",
     SocietyId: "greenwood",
-    Status: "Active"
+    Status: "Active",
+    MustChangePassword: false,
+    Phone: "+91 98765 43210",
+    IsSuperAdmin: true
   },
   {
     id: "Auth-gw-amit-sharma-alt",
@@ -955,7 +965,11 @@ export const MULTI_TENANT_USER_AUTHS: UserAuthMock[] = [
     Salt: "SALT-GW-AMIT-ALT",
     RoleId: "Role-greenwood-admin",
     SocietyId: "greenwood",
-    Status: "Active"
+    Status: "Active",
+    MustChangePassword: true,
+    Phone: "+91 98765 43210",
+    TempPassword: "Pass-9281-AMIT",
+    IsSuperAdmin: true
   },
   // Royal Heights Primary Admin: Royal Secretary
   {
@@ -965,7 +979,11 @@ export const MULTI_TENANT_USER_AUTHS: UserAuthMock[] = [
     Salt: "SALT-ROYAL-SEC",
     RoleId: "Role-royal-admin",
     SocietyId: "royal_heights",
-    Status: "Active"
+    Status: "Active",
+    MustChangePassword: true,
+    Phone: "+91 98111 22334",
+    TempPassword: "Pass-3104-ROYAL",
+    IsSuperAdmin: true
   }
 ];
 
