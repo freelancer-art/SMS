@@ -924,3 +924,187 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- ============================================================================
+-- 7. ADDITIONAL FEATURE MIGRATION & SCHEMAS (DYNAMIC IDENTITY, NOTIFICATION LOGS,
+--    FEATURE FLAGS, EMERGENCY ALERTS, KIOSK NOTIFICATIONS, STAFF, NOC & ASSETS)
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- 1. Dynamic Identity & Credentials (profiles & UserAuth)
+-- ----------------------------------------------------------------------------
+
+-- Create 'profiles' table if using standard Supabase Auth profiles pattern
+CREATE TABLE IF NOT EXISTS public."profiles" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "user_id" TEXT UNIQUE,
+  "email" TEXT,
+  "full_name" TEXT,
+  "role" TEXT DEFAULT 'RESIDENT',
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "society_code" TEXT,
+  "must_change_password" BOOLEAN DEFAULT true,
+  "created_at" TIMESTAMPTZ DEFAULT NOW(),
+  "updated_at" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Ensure columns exist on 'profiles' table
+ALTER TABLE public."profiles" ADD COLUMN IF NOT EXISTS "must_change_password" BOOLEAN DEFAULT true;
+ALTER TABLE public."profiles" ADD COLUMN IF NOT EXISTS "society_code" TEXT;
+ALTER TABLE public."profiles" ADD COLUMN IF NOT EXISTS "society_id" TEXT;
+
+-- Ensure columns exist on 'UserAuth' table
+ALTER TABLE public."UserAuth" ADD COLUMN IF NOT EXISTS "MustChangePassword" BOOLEAN DEFAULT true;
+ALTER TABLE public."UserAuth" ADD COLUMN IF NOT EXISTS "SocietyCode" TEXT;
+
+-- Create table 'notification_logs'
+CREATE TABLE IF NOT EXISTS public."notification_logs" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "user_id" TEXT,
+  "recipient_contact" TEXT NOT NULL,
+  "channel" TEXT NOT NULL CHECK ("channel" IN ('email', 'sms', 'push')),
+  "notification_type" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'delivered' CHECK ("status" IN ('pending', 'delivered', 'failed')),
+  "error_message" TEXT,
+  "sent_at" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 2. Configurable Modules & Feature Flags
+-- ----------------------------------------------------------------------------
+
+-- Ensure 'enabled_modules' column exists on 'Societies' table
+ALTER TABLE public."Societies" 
+  ADD COLUMN IF NOT EXISTS "enabled_modules" JSONB 
+  DEFAULT '{"gatekeeper": true, "billing": true, "helpdesk": true, "voting": true, "staff_tracking": false, "noc_workflow": false, "asset_register": false}'::jsonb;
+
+-- ----------------------------------------------------------------------------
+-- 3. Kiosk & Emergency Alerts (notifications & emergency_alerts)
+-- ----------------------------------------------------------------------------
+
+-- Table 'notifications' (snake_case alias / table)
+CREATE TABLE IF NOT EXISTS public."notifications" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "user_id" TEXT,
+  "title" TEXT NOT NULL,
+  "message" TEXT NOT NULL,
+  "type" TEXT NOT NULL CHECK ("type" IN ('gate', 'notice', 'billing', 'emergency', 'system')),
+  "is_read" BOOLEAN DEFAULT false,
+  "created_at" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Table 'emergency_alerts' (snake_case alias / table)
+CREATE TABLE IF NOT EXISTS public."emergency_alerts" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "alert_title" TEXT NOT NULL,
+  "severity" TEXT NOT NULL DEFAULT 'warning' CHECK ("severity" IN ('critical', 'warning', 'info')),
+  "message" TEXT NOT NULL,
+  "active_until" TIMESTAMPTZ,
+  "created_at" TIMESTAMPTZ DEFAULT NOW(),
+  "created_by" TEXT
+);
+
+-- ----------------------------------------------------------------------------
+-- 4. Staff, NOC & Asset Register Tables
+-- ----------------------------------------------------------------------------
+
+-- Table 'staff_members'
+CREATE TABLE IF NOT EXISTS public."staff_members" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "full_name" TEXT NOT NULL,
+  "role" TEXT NOT NULL,
+  "phone_number" TEXT NOT NULL,
+  "qr_code_pass" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'active' CHECK ("status" IN ('active', 'inactive', 'terminated')),
+  "created_at" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Table 'staff_attendance_logs'
+CREATE TABLE IF NOT EXISTS public."staff_attendance_logs" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "staff_id" TEXT REFERENCES public."staff_members"("id") ON DELETE CASCADE,
+  "flat_no" TEXT,
+  "check_in_time" TIMESTAMPTZ DEFAULT NOW(),
+  "check_out_time" TIMESTAMPTZ,
+  "gate_id" TEXT DEFAULT 'Gate 1'
+);
+
+-- Table 'noc_requests'
+CREATE TABLE IF NOT EXISTS public."noc_requests" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "flat_no" TEXT NOT NULL,
+  "request_type" TEXT NOT NULL CHECK ("request_type" IN ('move_in', 'move_out')),
+  "status" TEXT NOT NULL DEFAULT 'pending' CHECK ("status" IN ('pending', 'treasurer_approved', 'issued', 'rejected')),
+  "shift_date" DATE NOT NULL,
+  "deposit_amount" NUMERIC DEFAULT 5000,
+  "created_at" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Table 'society_assets'
+CREATE TABLE IF NOT EXISTS public."society_assets" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "society_id" TEXT REFERENCES public."Societies"("id") ON DELETE CASCADE,
+  "asset_name" TEXT NOT NULL,
+  "category" TEXT NOT NULL,
+  "location" TEXT,
+  "purchase_date" DATE,
+  "warranty_expiry" DATE,
+  "amc_vendor_name" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'operational' CHECK ("status" IN ('operational', 'under_maintenance', 'decommissioned')),
+  "created_at" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ----------------------------------------------------------------------------
+-- 5. Row-Level Security (RLS) & Tenant Isolation Policies
+-- ----------------------------------------------------------------------------
+
+-- Enable RLS on all newly created tables
+ALTER TABLE public."profiles" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."notification_logs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."notifications" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."emergency_alerts" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."staff_members" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."staff_attendance_logs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."noc_requests" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."society_assets" ENABLE ROW LEVEL SECURITY;
+
+-- Dynamic Tenant Isolation Policy Generator via auth.jwt() OR Public REST Access
+DO $$
+DECLARE
+  tbl text;
+  pol text;
+  new_tables text[] := ARRAY[
+    'profiles', 'notification_logs', 'notifications', 'emergency_alerts', 
+    'staff_members', 'staff_attendance_logs', 'noc_requests', 'society_assets'
+  ];
+BEGIN
+  FOREACH tbl IN ARRAY new_tables LOOP
+    -- Drop existing policies for clean idempotency
+    FOR pol IN (SELECT policyname FROM pg_policies WHERE tablename = tbl AND schemaname = 'public') LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON %I;', pol, tbl);
+    END LOOP;
+
+    -- Tenant-isolated access policy matching SocietyId or JWT claim
+    EXECUTE format('
+      CREATE POLICY %I ON %I 
+      FOR ALL 
+      USING (
+        auth.role() = ''anon'' 
+        OR auth.role() = ''authenticated''
+        OR (auth.jwt() ->> ''SocietyId'')::text = society_id
+      ) 
+      WITH CHECK (
+        auth.role() = ''anon'' 
+        OR auth.role() = ''authenticated''
+        OR (auth.jwt() ->> ''SocietyId'')::text = society_id
+      );
+    ', tbl || ' Tenant Isolation Access Policy', tbl);
+  END LOOP;
+END $$;
+
+

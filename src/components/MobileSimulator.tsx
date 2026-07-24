@@ -62,6 +62,8 @@ import {
   QrCode,
   FileCheck,
   Package,
+  WifiOff,
+  Upload,
 } from "lucide-react";
 import {
   BarChart,
@@ -126,6 +128,14 @@ import HowToHelpDrawer from "./HowToHelpDrawer";
 import StaffTrackingModule from "./StaffTrackingModule";
 import NocWorkflowModule from "./NocWorkflowModule";
 import AssetInventoryModule from "./AssetInventoryModule";
+import { FinancialInsightsPanel } from "./FinancialInsightsPanel";
+import { MemberCsvImportModal } from "./MemberCsvImportModal";
+import { MemberDuesHistoryModal } from "./MemberDuesHistoryModal";
+import {
+  queueOfflineOperation,
+  getPendingOfflineQueue,
+  syncOfflineQueue,
+} from "../utils/offlineSync";
 
 interface MobileSimulatorProps {
   members: Member[];
@@ -526,6 +536,64 @@ export default function MobileSimulator({
 
   const [loginRole, setLoginRole] = useState<"Admin" | "Member">("Admin");
   const [selectedMemberFlat, setSelectedMemberFlat] = useState<string>("");
+
+  // New Feature States
+  const [viewDuesHistoryMember, setViewDuesHistoryMember] = useState<Member | null>(null);
+  const [showCsvImportModal, setShowCsvImportModal] = useState<boolean>(false);
+  const [autoNotifyResidentOnGateCheckIn, setAutoNotifyResidentOnGateCheckIn] = useState<boolean>(() => {
+    const saved = localStorage.getItem("society_auto_notify_visitor");
+    return saved !== null ? saved === "true" : true;
+  });
+  const [isOffline, setIsOffline] = useState<boolean>(() => !navigator.onLine);
+  const [pendingOfflineOpsCount, setPendingOfflineOpsCount] = useState<number>(0);
+
+  useEffect(() => {
+    const checkQueue = async () => {
+      const queue = await getPendingOfflineQueue();
+      setPendingOfflineOpsCount(queue.length);
+    };
+    checkQueue();
+
+    const handleOnline = async () => {
+      setIsOffline(false);
+      triggerToast("🌐 Network connection restored. Syncing IndexedDB offline updates...");
+      const res = await syncOfflineQueue(async () => true);
+      if (res.syncedCount > 0) {
+        triggerToast(`✅ Successfully synchronized ${res.syncedCount} offline updates!`);
+      }
+      checkQueue();
+    };
+
+    const handleOffline = () => {
+      setIsOffline(true);
+      triggerToast("⚡ Network offline. Updates will queue to IndexedDB.");
+    };
+
+    const handleQueueUpdated = () => {
+      checkQueue();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("society_offline_queue_updated", handleQueueUpdated);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("society_offline_queue_updated", handleQueueUpdated);
+    };
+  }, []);
+
+  const handleToggleAutoNotifyVisitor = () => {
+    const nextVal = !autoNotifyResidentOnGateCheckIn;
+    setAutoNotifyResidentOnGateCheckIn(nextVal);
+    localStorage.setItem("society_auto_notify_visitor", String(nextVal));
+    triggerToast(
+      nextVal
+        ? "Auto-notify Resident on Gate Check-in ENABLED"
+        : "Auto-notify Resident on Gate Check-in DISABLED"
+    );
+  };
   const [zoomScale, setZoomScale] = useState<number>(() => {
     const saved = localStorage.getItem("society_sim_zoom");
     return saved ? parseFloat(saved) : 0.8;
@@ -3150,6 +3218,30 @@ export default function MobileSimulator({
                         <span>{pullDistance >= 40 ? 'Release to refresh database...' : 'Pull down to refresh'}</span>
                       </div>
                     )}
+
+                    {/* IndexedDB Offline Sync Status Banner */}
+                    {(isOffline || pendingOfflineOpsCount > 0) && (
+                      <div className="bg-amber-500 text-slate-900 px-3 py-1.5 font-bold text-[10px] flex items-center justify-between shadow-xs rounded-xl mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <WifiOff className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            {isOffline ? "⚡ Offline Mode" : "Online"} — {pendingOfflineOpsCount} queued updates in IndexedDB
+                          </span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            triggerToast("Syncing IndexedDB offline queue...");
+                            const res = await syncOfflineQueue(async () => true);
+                            setPendingOfflineOpsCount(0);
+                            triggerToast(`Synced ${res.syncedCount} offline operations!`);
+                          }}
+                          className="px-2 py-0.5 bg-slate-900 text-white rounded text-[9px] font-extrabold hover:bg-slate-800 transition-all cursor-pointer shadow-3xs"
+                        >
+                          Sync Now
+                        </button>
+                      </div>
+                    )}
+
                     {/* ----------------- TABS: DASHBOARD ----------------- */}
                     {currentTab === "dashboard" && (
                       <div className="space-y-3 pb-4 animate-fade-in">
@@ -4777,6 +4869,34 @@ export default function MobileSimulator({
                                 </div>
                               </div>
 
+                              {/* Resident Auto-Notification Toggle */}
+                              <div className="flex justify-between items-center p-2 rounded-xl bg-indigo-50/80 border border-indigo-150">
+                                <div className="flex items-center gap-1.5">
+                                  <Bell className="w-3.5 h-3.5 text-indigo-600" />
+                                  <div>
+                                    <span className="text-[9.5px] font-extrabold text-slate-800 block">
+                                      Auto-notify Resident on Gate Check-in
+                                    </span>
+                                    <span className="text-[8px] text-slate-500 block">
+                                      Push instant toast alert and in-app notice to host flat
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleToggleAutoNotifyVisitor}
+                                  className={`w-9 h-5 rounded-full p-0.5 transition-colors cursor-pointer ${
+                                    autoNotifyResidentOnGateCheckIn ? "bg-indigo-600" : "bg-slate-300"
+                                  }`}
+                                >
+                                  <div
+                                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                                      autoNotifyResidentOnGateCheckIn ? "translate-x-4" : "translate-x-0"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+
                               {/* Quick Check-in form */}
                               <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 text-[10px] space-y-2">
                                 <h5 className="font-black text-slate-700 text-[9px] uppercase tracking-wider mb-1">
@@ -5095,6 +5215,14 @@ export default function MobileSimulator({
                             />
                           </div>
                           <button
+                            onClick={() => setShowCsvImportModal(true)}
+                            className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded-xl flex items-center gap-1 text-[11px] font-bold shadow-3xs transition-all flex-shrink-0 cursor-pointer active:scale-95"
+                            title="Bulk import members from CSV spreadsheet"
+                          >
+                            <Upload className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>Bulk Import</span>
+                          </button>
+                          <button
                             onClick={handleOpenAddMember}
                             className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl flex items-center gap-1 text-[11px] font-bold shadow-sm transition-all flex-shrink-0 active:scale-95"
                             title="Add Member"
@@ -5381,6 +5509,17 @@ export default function MobileSimulator({
                                           </span>
                                         )}
                                       </div>
+
+                                      {/* Dues History Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewDuesHistoryMember(member)}
+                                        className="w-full py-1 px-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-[9px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer shadow-3xs active:scale-95"
+                                        title="View complete invoice & payment ledger history for this flat"
+                                      >
+                                        <FileText className="w-3 h-3 text-purple-600" />
+                                        <span>View Dues History</span>
+                                      </button>
                                     </div>
                                   </div>
                                 </div>
@@ -5721,6 +5860,9 @@ export default function MobileSimulator({
                     {/* ----------------- TABS: EXPENSES ----------------- */}
                     {currentTab === "expenses" && (
                       <div className="space-y-2.5 relative">
+                        {/* Financial Insights Dashboard Panel */}
+                        <FinancialInsightsPanel expenses={expenses} invoices={invoices} isDark={isDark} />
+
                         <div className="flex justify-between items-center">
                           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                             Debit Outflows
@@ -14574,6 +14716,32 @@ export default function MobileSimulator({
                   theme={theme}
                 />
               )}
+
+              {/* Member CSV Bulk Import Modal */}
+              <MemberCsvImportModal
+                isOpen={showCsvImportModal}
+                onClose={() => setShowCsvImportModal(false)}
+                onImportMembers={(newMembers) => {
+                  if (onSaveOrUpdateMember) {
+                    newMembers.forEach((m) => onSaveOrUpdateMember(m));
+                    triggerToast(`Imported ${newMembers.length} residents successfully!`);
+                  }
+                }}
+                existingMembers={members}
+                activeSocietyId={activeSocietyId}
+                wingsList={wingsList}
+                isDark={isDark}
+              />
+
+              {/* Member Dues & Payments Ledger History Modal */}
+              <MemberDuesHistoryModal
+                member={viewDuesHistoryMember}
+                invoices={invoices}
+                payments={payments}
+                isOpen={!!viewDuesHistoryMember}
+                onClose={() => setViewDuesHistoryMember(null)}
+                isDark={isDark}
+              />
             </div>
           </div>
         </div>

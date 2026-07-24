@@ -16,6 +16,10 @@
    - 5.4 Resident NOC Clearance & Move-In Deposit Workflow
    - 5.5 Society Asset Inventory & AMC Expiry Alerts
    - 5.6 Real-Time Notification Center & Emergency Banner
+   - 5.7 Flat-Level Dues History & Invoice Ledger
+   - 5.8 Financial Insights Expense Analytics (Recharts BarChart)
+   - 5.9 Member Directory CSV Bulk Import
+   - 5.10 IndexedDB Offline Queue & Network Recovery Sync
 7. [Phase 6: Automated Test Suites & Security Boundaries](#phase-6-automated-test-suites--security-boundaries)
 8. [Phase 7: Comprehensive Troubleshooting & Error Resolution Matrix](#phase-7-comprehensive-troubleshooting--error-resolution-matrix)
 
@@ -170,6 +174,31 @@ Societies can toggle features ON or OFF dynamically based on their specific infr
 1. Residents and admins view unread notification counts on the top bell icon.
 2. Clicking the bell opens the **Notification Center Modal**, supporting filtering by Emergency, Gate, Notice, and Billing categories.
 3. For critical society emergencies (water pipe bursts, power outages, security alerts), admins publish a sticky **Top Emergency Alert Banner** that renders prominently on all resident home screens.
+4. Gatekeeper check-ins can trigger auto-notifications directly to host residents with instant toast alerts.
+
+### 5.7 Flat-Level Dues History & Invoice Ledger
+1. Open the **Members Directory** or Member Profile in the Admin or Resident workspace.
+2. Locate the resident flat card and click **"View Dues History"**.
+3. The system filters all society `invoices` and `payments` specifically for that flat number.
+4. Displays a chronological ledger timeline showing transaction date, type (Maintenance Invoice, Water Dues, Special Levy, Payment Credit), amount (₹), payment status badges (`Paid`, `Unpaid`, `Overdue`), and receipt payment mode (UPI, Net Banking, Cheque, Cash).
+
+### 5.8 Financial Insights Expense Analytics (Recharts BarChart)
+1. Navigate to the **Expenses / Outflows Tab** in the Mobile Simulator or Admin Dashboard.
+2. The **Financial Insights Panel** automatically aggregates all debit outflow records.
+3. Expenses are grouped by `Category` (e.g. *Repairs & Maintenance, Utilities, Elevators, Cleaning, Security, Legal & Audit, Administrative, Landscaping*).
+4. An interactive **Recharts BarChart** visualizes total spending per category and monthly expenditure trends to help the Treasurer and Committee identify cost anomalies and budget variances.
+
+### 5.9 Member Directory CSV Bulk Import
+1. Navigate to **Members Directory** in the Admin workspace.
+2. Click **"Bulk Import"** to open the `MemberCsvImportModal`.
+3. Click **"Download Sample Template"** to obtain the standardized `.csv` file format containing header columns: `FlatNo, OwnerName, ContactNo, Email, Balance`.
+4. Upload or drop the filled CSV spreadsheet file. The system automatically parses CSV rows into JSON objects, validates required fields, detects duplicate flat entries, and appends valid resident records directly to the local directory and database.
+
+### 5.10 IndexedDB Offline Queue & Network Recovery Sync
+1. During internet connectivity drops or server outages, the application automatically catches failed REST payload requests.
+2. JSON mutation payloads (`POST`, `PUT`, `DELETE`) are safely saved to IndexedDB (`society_offline_store`).
+3. The header renders an **"⚡ Offline Mode — N queued updates in IndexedDB"** banner.
+4. When connectivity returns, users or admins can tap **"Sync Now"** (or allow the background sync engine) to automatically push queued updates back to the Supabase REST API endpoints in sequence.
 
 ---
 
@@ -200,6 +229,8 @@ npm run test:security
 | **`"Staff Check-In Denied: Invalid Passcode / Inactive Status"`** | Incorrect 4-digit PIN entered or staff marked as Terminated. | 1. Open **Staff Tracking Directory**.<br>2. Verify staff member's passcode and ensure status is **Active**.<br>3. Reset passcode if forgotten. |
 | **`"Maintenance due date day must be between 1 and 28"`** | Due date set to 29, 30, or 31, which invalidates short months like February. | 1. Open **Module Settings & Toggles**.<br>2. Set `DueDateDay` to a valid number between 1 and 28 (Default: 15).<br>3. Save configuration. |
 | **`"Access Denied: Module disabled by society"`** | User attempting to access a module toggled OFF in society settings. | 1. Managing Committee opens **Module Settings & Toggles**.<br>2. Enable desired feature (e.g. Staff Tracking or Asset AMC).<br>3. Save settings. |
+| **`"CSV Import Failed: Missing required column FlatNo or OwnerName"`** | Uploaded CSV spreadsheet file missing required standard headers. | 1. Click **Download Sample Template** in the Bulk Import Modal.<br>2. Ensure header row includes `FlatNo, OwnerName, ContactNo, Email, Balance`.<br>3. Re-upload file. |
+| **`"Offline Queue Sync Error / Pending operations"`** | Browser has queued network requests in IndexedDB while offline. | 1. Ensure internet connectivity is active.<br>2. Tap **Sync Now** in the top yellow warning banner.<br>3. System flushes queued operations to Supabase REST API. |
 
 ---
 *Operational Manual Version 3.0 — Smart Co-op Housing Society Management SaaS*

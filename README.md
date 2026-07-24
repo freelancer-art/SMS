@@ -39,16 +39,22 @@ Complete operational guides, configurable settings specifications, and automated
 * **Resident NOC Workflow**: Step-by-step move-in/move-out NOC requests with Treasurer dues verification, Secretary authorization, and refundable deposit tracking.
 * **Society Asset & AMC Register**: Track elevators, DG sets, water pumps, and fire safety equipment with vendor contracts and automated 30-day expiry notifications.
 
-### 6. Notifications, Emergency Alerts & Financial Billing
-* **Real-Time Notification Bell Center**: Unread count badges, category filtering (Emergency, Gate, Notice, Billing), and push notification dispatch service.
+### 6. Notifications, Financial Billing & Analytics
+* **Real-Time Notification Bell Center**: Unread count badges, category filtering (Emergency, Gate, Notice, Billing), auto-notifications on gate check-ins, and push notification dispatch service.
 * **Sticky Emergency Banner**: High-visibility top alert banner on resident home view for water, power, or security emergencies.
 * **Batch Invoicing & Printable PDF Receipts**: Auto-calculate maintenance fees and print formatted PDF receipt statements with GST breakups and transaction IDs.
+* **Flat Dues History Ledger**: Dedicated transaction history modal within member profiles filtering invoices and payments specifically for that flat with chronological date, type, amount, status badges, and payment modes.
+* **Recharts Financial Insights Panel**: Interactive expense analytics panel in the dashboard utilizing Recharts `BarChart` to group society debit outflows by category (Repairs, Utilities, Elevators, Cleaning, Security, etc.) and visualize monthly spending patterns.
 
-### 7. Multi-Role Mobile Simulator (Admin & Resident App)
+### 7. Offline Sync Strategy & Bulk Data Onboarding
+* **IndexedDB Offline Queue & Resilience**: Intercepts failed network payload requests during connectivity dropouts, stores queued updates in IndexedDB (`society_offline_store`), and displays an **Offline Sync Status Banner** with a manual **"Sync Now"** button to flush updates back to the Supabase REST API when back online.
+* **CSV Member Directory Bulk Import**: CSV-to-JSON parser component (`MemberCsvImportModal`) allowing society admins to download a pre-formatted CSV template (`FlatNo, OwnerName, ContactNo, Email, Balance`), validate records, and batch import members directly into the local directory and database.
+
+### 8. Multi-Role Mobile Simulator (Admin & Resident App)
 * **Visual Device Shell**: Elegant mobile viewport matching modern smartphone dimensions with Expo SDK 51 companion code.
 * **Role-Based Workspaces**:
-  * **Admin View**: Access to settings, ledger controls, notice publishing, committee RBAC, staff tracking, NOC clearance, asset AMC register, and audit logging.
-  * **Resident View**: View outstanding dues, log online maintenance payments, print PDF receipts, track complaints, pre-approve guest passes, view staff attendance, apply for NOCs, and vote in AGM polls.
+  * **Admin View**: Access to settings, ledger controls, notice publishing, committee RBAC, staff tracking, NOC clearance, asset AMC register, CSV bulk import, expense analytics, and audit logging.
+  * **Resident View**: View outstanding dues, view flat dues history, log online maintenance payments, print PDF receipts, track complaints, pre-approve guest passes, view staff attendance, apply for NOCs, and vote in AGM polls.
 
 ---
 
